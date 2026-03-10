@@ -1,9 +1,15 @@
-"""Persistent settings — saved connections, favorites, preferences.
+"""Persistent settings — connection profiles, preferences.
 
 Settings are stored as JSON in an OS-appropriate config directory:
   macOS:   ~/Library/Application Support/opguia/settings.json
   Linux:   ~/.config/opguia/settings.json
   Windows: %APPDATA%/opguia/settings.json
+
+Each connection profile stores:
+  - name:         display name for the profile
+  - url:          OPC UA endpoint URL
+  - allow_writes: whether writes are enabled for this connection
+  - watched:      list of {name, node_id} for the watch window
 """
 
 import json
@@ -23,87 +29,137 @@ def _config_dir() -> Path:
         return Path.home() / ".config" / _APP_NAME
 
 
-_DEFAULTS = {
-    "allow_writes": False,
-    "connections": [],   # list of saved endpoint URL strings
-    "favorites": [],     # list of {"name": str, "node_id": str}
-}
+def _new_profile(name: str, url: str) -> dict:
+    return {
+        "name": name,
+        "url": url,
+        "allow_writes": False,
+        "watched": [],
+    }
 
 
 class Settings:
-    """Read/write persistent JSON settings."""
+    """Read/write persistent JSON settings with connection profiles."""
 
     def __init__(self):
         self._path = _config_dir() / "settings.json"
         self._data: dict = {}
+        self._active_url: str | None = None  # set when connected
         self._load()
 
     def _load(self):
         if self._path.exists():
             try:
-                self._data = json.loads(self._path.read_text())
+                data = json.loads(self._path.read_text())
             except (json.JSONDecodeError, OSError):
+                data = {}
+            # Wipe old format — no migration, just start fresh
+            if "profiles" in data and isinstance(data["profiles"], list):
+                self._data = data
+            else:
                 self._data = {}
-        for key, default in _DEFAULTS.items():
-            self._data.setdefault(key, default if not isinstance(default, list) else list(default))
+        self._data.setdefault("profiles", [])
 
     def _save(self):
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.write_text(json.dumps(self._data, indent=2))
 
-    # ── Generic access ──
+    def _find_profile(self, url: str) -> dict | None:
+        for p in self._data["profiles"]:
+            if p["url"] == url:
+                return p
+        return None
 
-    def get(self, key: str, default=None):
-        return self._data.get(key, default)
+    # ── Active profile (set by browse page on connect) ──
 
-    def set(self, key: str, value):
-        self._data[key] = value
-        self._save()
-
-    # ── Connections ──
-
-    @property
-    def connections(self) -> list[str]:
-        return self._data.get("connections", [])
-
-    def add_connection(self, url: str):
-        conns = self._data.setdefault("connections", [])
-        if url not in conns:
-            conns.append(url)
-            self._save()
-
-    def remove_connection(self, url: str):
-        conns = self._data.get("connections", [])
-        if url in conns:
-            conns.remove(url)
-            self._save()
-
-    # ── Favorites (saved variable bookmarks) ──
+    def set_active(self, url: str):
+        """Set which profile is active based on the connected endpoint."""
+        self._active_url = url
 
     @property
-    def favorites(self) -> list[dict]:
-        return self._data.get("favorites", [])
+    def active_profile(self) -> dict | None:
+        if self._active_url:
+            return self._find_profile(self._active_url)
+        return None
 
-    def add_favorite(self, name: str, node_id: str):
-        favs = self._data.setdefault("favorites", [])
-        if not any(f["node_id"] == node_id for f in favs):
-            favs.append({"name": name, "node_id": node_id})
+    # ── Profile CRUD ──
+
+    @property
+    def profiles(self) -> list[dict]:
+        return self._data.get("profiles", [])
+
+    def add_profile(self, name: str, url: str) -> dict:
+        existing = self._find_profile(url)
+        if existing:
+            existing["name"] = name
             self._save()
+            return existing
+        p = _new_profile(name, url)
+        self._data["profiles"].append(p)
+        self._save()
+        return p
 
-    def remove_favorite(self, node_id: str):
-        favs = self._data.get("favorites", [])
-        self._data["favorites"] = [f for f in favs if f["node_id"] != node_id]
+    def remove_profile(self, url: str):
+        self._data["profiles"] = [p for p in self.profiles if p["url"] != url]
         self._save()
 
-    def is_favorite(self, node_id: str) -> bool:
-        return any(f["node_id"] == node_id for f in self.favorites)
+    def ensure_profile(self, url: str, server_name: str = ""):
+        """Ensure a profile exists for the given URL (creates if missing)."""
+        if not self._find_profile(url):
+            name = server_name or url
+            self.add_profile(name, url)
 
-    # ── Preferences ──
+    # ── Per-profile preferences ──
 
     @property
     def allow_writes(self) -> bool:
-        return self._data.get("allow_writes", False)
+        p = self.active_profile
+        return p.get("allow_writes", False) if p else False
 
     @allow_writes.setter
     def allow_writes(self, value: bool):
-        self.set("allow_writes", value)
+        p = self.active_profile
+        if p:
+            p["allow_writes"] = value
+            self._save()
+
+    # ── Watched variables (per-profile) ──
+
+    @property
+    def watched(self) -> list[dict]:
+        p = self.active_profile
+        return p.get("watched", []) if p else []
+
+    def add_watched(self, name: str, node_id: str):
+        p = self.active_profile
+        if not p:
+            return
+        w = p.setdefault("watched", [])
+        if not any(item["node_id"] == node_id for item in w):
+            w.append({"name": name, "node_id": node_id})
+            self._save()
+
+    def remove_watched(self, node_id: str):
+        p = self.active_profile
+        if not p:
+            return
+        p["watched"] = [item for item in p.get("watched", []) if item["node_id"] != node_id]
+        self._save()
+
+    def is_watched(self, node_id: str) -> bool:
+        return any(item["node_id"] == node_id for item in self.watched)
+
+    # ── Backward compat aliases ──
+
+    @property
+    def favorites(self) -> list[dict]:
+        return self.watched
+
+    def add_favorite(self, name: str, node_id: str):
+        self.add_watched(name, node_id)
+
+    def remove_favorite(self, node_id: str):
+        self.remove_watched(node_id)
+
+    def is_favorite(self, node_id: str) -> bool:
+        return self.is_watched(node_id)

@@ -1,7 +1,7 @@
 """Connection page — endpoint input, server scan, connect.
 
-Landing page at "/". Shows an endpoint input field, saved connections,
-and auto-scans for local OPC UA servers on common ports.
+Landing page at "/". Shows an endpoint input field, saved connection
+profiles, and auto-scans for local OPC UA servers on common ports.
 """
 
 import asyncio
@@ -21,6 +21,10 @@ def register(client: OpcuaClient, settings: Settings):
             # Manual endpoint input
             with ui.card().classes("w-96 p-4"):
                 endpoint = ui.input("Endpoint", value="opc.tcp://localhost:4840").classes("w-full")
+                profile_name = ui.input("Profile name", value="").props("dense").classes(
+                    "w-full"
+                ).style("font-size:12px")
+                profile_name.props('placeholder="Optional — uses server name"')
                 status = ui.label("").classes("text-xs")
 
                 async def do_connect():
@@ -28,6 +32,10 @@ def register(client: OpcuaClient, settings: Settings):
                     status.classes(remove="text-red-400 text-green-400")
                     try:
                         await client.connect(endpoint.value)
+                        # Ensure profile exists for this endpoint
+                        name = profile_name.value.strip() or client.server_name or endpoint.value
+                        settings.ensure_profile(endpoint.value, name)
+                        settings.set_active(endpoint.value)
                         status.text = "Connected"
                         status.classes(add="text-green-400")
                         await asyncio.sleep(0.3)
@@ -40,22 +48,22 @@ def register(client: OpcuaClient, settings: Settings):
                     ui.button("Connect", on_click=do_connect).classes("flex-grow")
                     ui.button(
                         icon="bookmark_add",
-                        on_click=lambda: save_connection(endpoint.value),
-                    ).props("flat dense").tooltip("Save connection")
+                        on_click=lambda: save_profile(endpoint.value, profile_name.value.strip()),
+                    ).props("flat dense").tooltip("Save profile")
 
-            # Saved connections
+            # Saved profiles
             saved_card = ui.card().classes("w-96 p-4")
 
             def render_saved():
                 saved_card.clear()
                 with saved_card:
-                    ui.label("Saved Connections").classes("text-sm font-bold")
-                    conns = settings.connections
-                    if not conns:
-                        ui.label("No saved connections").classes("text-xs text-gray-500 mt-1")
+                    ui.label("Saved Profiles").classes("text-sm font-bold")
+                    profiles = settings.profiles
+                    if not profiles:
+                        ui.label("No saved profiles").classes("text-xs text-gray-500 mt-1")
                     else:
                         with ui.column().classes("w-full gap-1 mt-2"):
-                            for url in conns:
+                            for prof in profiles:
                                 with ui.row().classes(
                                     "items-center gap-2 w-full hover:bg-gray-800 rounded px-2 py-1"
                                 ):
@@ -64,22 +72,34 @@ def register(client: OpcuaClient, settings: Settings):
                                     )
                                     with pick_row:
                                         ui.icon("bookmark", size="14px").classes("text-blue-400 shrink-0")
-                                        ui.label(url).classes("text-xs font-mono truncate")
+                                        with ui.column().classes("gap-0 min-w-0"):
+                                            ui.label(prof["name"]).classes("text-xs font-medium truncate")
+                                            ui.label(prof["url"]).classes(
+                                                "font-mono text-gray-500 truncate"
+                                            ).style("font-size:10px")
+                                        watched_count = len(prof.get("watched", []))
+                                        if watched_count:
+                                            ui.badge(str(watched_count), color="blue").props(
+                                                "rounded"
+                                            ).classes("text-xs").tooltip(
+                                                f"{watched_count} watched variable{'s' if watched_count != 1 else ''}"
+                                            )
 
-                                    def pick(u=url):
+                                    def pick(u=prof["url"], n=prof["name"]):
                                         endpoint.value = u
+                                        profile_name.value = n
                                     pick_row.on("click", pick)
 
-                                    def remove(u=url):
-                                        settings.remove_connection(u)
+                                    def remove(u=prof["url"]):
+                                        settings.remove_profile(u)
                                         render_saved()
 
                                     ui.button(
                                         icon="close", on_click=remove,
                                     ).props("flat dense round size=xs").classes("text-gray-500 shrink-0")
 
-            def save_connection(url: str):
-                settings.add_connection(url)
+            def save_profile(url: str, name: str = ""):
+                settings.add_profile(name or url, url)
                 render_saved()
 
             render_saved()
@@ -108,8 +128,10 @@ def register(client: OpcuaClient, settings: Settings):
                                 ui.label(srv["name"] or "OPC UA Server").classes("text-xs font-bold")
                                 ui.label(srv["url"]).classes("text-xs text-gray-400 font-mono")
 
-                            def pick(url=srv["url"]):
+                            def pick(url=srv["url"], name=srv["name"]):
                                 endpoint.value = url
+                                if name:
+                                    profile_name.value = name
                             row.on("click", pick)
 
             asyncio.create_task(run_scan())

@@ -6,6 +6,7 @@ Layout (all flexbox, no calc):
   ├────────┬────────────────────────┤
   │Sidebar │ Search bar (32px)      │  ← middle row (flex:1)
   │(200px) │ Tree (flex:1 scroll)   │
+  │        │ Watch panel (bottom)   │
   ├────────┴────────────────────────┤
   │ Bottom bar (24px, shrink-0)     │
   └─────────────────────────────────┘
@@ -17,6 +18,7 @@ from opguia.client import OpcuaClient
 from opguia.settings import Settings
 from opguia.components.tree_view import create_tree_view
 from opguia.components.detail_panel import create_detail_panel
+from opguia.components.watch_panel import create_watch_panel
 
 
 def register(client: OpcuaClient, settings: Settings):
@@ -26,6 +28,10 @@ def register(client: OpcuaClient, settings: Settings):
         if not client.connected:
             ui.navigate.to("/")
             return
+
+        # Ensure profile exists and is active
+        settings.ensure_profile(client.endpoint, client.server_name)
+        settings.set_active(client.endpoint)
 
         # Override NiceGUI defaults — full-height flex column, no padding
         ui.query("body").style("margin:0; overflow:hidden")
@@ -39,8 +45,10 @@ def register(client: OpcuaClient, settings: Settings):
         ).style("height:40px; min-height:40px"):
             ui.label("OPC UA Browser").classes("text-sm font-bold")
             with ui.row().classes("items-center gap-3"):
-                if client.server_name:
-                    ui.label(f"Server: {client.server_name}").classes("text-xs text-gray-300")
+                profile = settings.active_profile
+                profile_name = profile["name"] if profile else client.server_name
+                if profile_name:
+                    ui.label(f"Profile: {profile_name}").classes("text-xs text-gray-300")
                 ui.badge("Connected", color="green").props("rounded").classes("text-xs")
 
         # ── Middle: sidebar + main content ──
@@ -83,38 +91,39 @@ def register(client: OpcuaClient, settings: Settings):
 
                 ui.separator().classes("my-2 mx-2")
 
-                # Favorites
-                ui.label("Favorites").classes(
+                # Watched variables
+                ui.label("Watched").classes(
                     "text-xs text-gray-500 uppercase tracking-wide px-3 pt-2 pb-1"
                 )
-                favorites_ct = ui.column().classes("w-full gap-0 px-1")
+                watched_ct = ui.column().classes("w-full gap-0 px-1")
 
-                def render_favorites():
-                    favorites_ct.clear()
-                    favs = settings.favorites
-                    with favorites_ct:
-                        if not favs:
-                            ui.label("No favorites").classes("text-xs text-gray-600 px-2")
-                        for fav in favs:
+                def render_watched_sidebar():
+                    watched_ct.clear()
+                    watched = settings.watched
+                    with watched_ct:
+                        if not watched:
+                            ui.label("No watched vars").classes("text-xs text-gray-600 px-2")
+                        for item in watched:
                             with ui.row().classes(
                                 "items-center gap-1 w-full hover:bg-white/5 rounded px-2 cursor-pointer"
-                            ).style("height:24px") as frow:
-                                ui.icon("star", size="12px").classes("text-yellow-500 shrink-0")
-                                ui.label(fav["name"]).classes("text-xs truncate flex-grow")
+                            ).style("height:24px") as wrow:
+                                ui.icon("visibility", size="12px").classes("text-blue-400 shrink-0")
+                                ui.label(item["name"]).classes("text-xs truncate flex-grow")
 
-                                def remove_fav(nid=fav["node_id"]):
-                                    settings.remove_favorite(nid)
-                                    render_favorites()
+                                def remove_watch(nid=item["node_id"]):
+                                    settings.remove_watched(nid)
+                                    render_watched_sidebar()
+                                    render_watch()
 
-                                ui.button(icon="close", on_click=remove_fav).props(
+                                ui.button(icon="close", on_click=remove_watch).props(
                                     "flat dense round size=xs"
                                 ).classes("text-gray-600 shrink-0").style("opacity:0.5")
 
-                            def open_fav(nid=fav["node_id"]):
+                            def open_watch(nid=item["node_id"]):
                                 asyncio.ensure_future(show_detail_dialog(nid))
-                            frow.on("click", open_fav)
+                            wrow.on("click", open_watch)
 
-                render_favorites()
+                render_watched_sidebar()
 
                 ui.separator().classes("my-2 mx-2")
 
@@ -142,6 +151,20 @@ def register(client: OpcuaClient, settings: Settings):
                     tree_container, rebuild_tree, set_root, poll_values = create_tree_view(
                         client, on_select_node=lambda nid: show_detail_dialog(nid),
                     )
+
+                # Watch panel (bottom, collapsible)
+                has_watched = bool(settings.watched)
+                with ui.expansion(
+                    "Watch", value=has_watched,
+                ).classes("w-full border-t border-gray-700").props("dense header-class='text-xs bg-gray-900'"):
+                    with ui.scroll_area().style("max-height:200px"):
+                        watch_ct, render_watch, poll_watch = create_watch_panel(
+                            client, settings,
+                            on_select_node=lambda nid: show_detail_dialog(nid),
+                            on_watch_changed=lambda: render_watched_sidebar(),
+                        )
+
+                render_watch()
 
         # ── Bottom bar ──
         with ui.row().classes(
@@ -172,6 +195,7 @@ def register(client: OpcuaClient, settings: Settings):
                 await asyncio.sleep(2)
                 try:
                     await poll_values()
+                    await poll_watch()
                 except Exception:
                     pass
 
@@ -185,11 +209,15 @@ def register(client: OpcuaClient, settings: Settings):
                     client,
                     on_set_root=lambda nid, name: _set_root_close(dlg, nid, name),
                     writes_enabled=lambda: settings.allow_writes,
-                    on_favorite_toggle=lambda: render_favorites(),
+                    on_favorite_toggle=lambda: _on_watch_changed(),
                     settings=settings,
                 )
             dlg.open()
             await show_details(node_id)
+
+        def _on_watch_changed():
+            render_watched_sidebar()
+            render_watch()
 
         async def _set_root_close(dlg, nid, name):
             dlg.close()

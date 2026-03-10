@@ -16,10 +16,11 @@ python main.py
 - `opguia/client.py` — async wrapper around asyncua (connect, browse, read, write, latency)
 - `opguia/scanner.py` — probes common OPC UA ports for server discovery
 - `opguia/pages/connection.py` — connection page with endpoint input + auto-scan
-- `opguia/pages/browse.py` — main browse page: sidebar + tree + status bar + detail dialog
+- `opguia/pages/browse.py` — main browse page: sidebar + tree + watch panel + status bar + detail dialog
 - `opguia/components/tree_view.py` — tree rendering with typed icons, inline values, status dots
 - `opguia/components/detail_panel.py` — full node attributes + write form (used in dialog)
-- `opguia/settings.py` — persistent settings (JSON in OS config dir: `~/Library/Application Support/opguia/`)
+- `opguia/components/watch_panel.py` — live-updating watched variable values (bottom panel)
+- `opguia/settings.py` — persistent settings with connection profiles (JSON in OS config dir)
 - `opguia/utils.py` — shared constants and helpers (type conversion, timestamp formatting, access level bits)
 
 ## Conventions
