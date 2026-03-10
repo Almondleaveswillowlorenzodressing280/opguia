@@ -1,5 +1,7 @@
 name: Publish to PyPI
 
+# Manual fallback — only triggers on manually-created GitHub releases.
+# Normal releases go through release.yml (auto-triggered by commit message).
 on:
   release:
     types: [published]
@@ -9,6 +11,8 @@ permissions:
 
 jobs:
   publish:
+    # Skip if the release was created by the release workflow (avoid double publish)
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     environment: pypi
     steps:

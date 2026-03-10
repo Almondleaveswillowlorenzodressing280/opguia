@@ -38,13 +38,16 @@ Version is in `opguia/__init__.py` (`__version__`), read by hatch from `pyprojec
 Use the release script:
 
 ```bash
-./release.sh 1.2.0
+./release.sh patch   # 1.1.0 → 1.1.1
+./release.sh minor   # 1.1.0 → 1.2.0
+./release.sh major   # 1.1.0 → 2.0.0
+./release.sh 1.2.3   # explicit version
 ```
 
-This bumps the version, builds, commits, tags `v1.2.0`, and pushes (GitHub Actions publishes to PyPI).
+The script auto-bumps the version, builds, generates release notes from git log, commits, tags (annotated with notes), and pushes.
 
-To release manually:
-1. Update `__version__` in `opguia/__init__.py`
-2. Commit as `v<version>`
-3. Tag `v<version>`
-4. Push with tags: `git push && git push --tags`
+Releases also trigger automatically via GitHub Actions when a commit is pushed to `main` with:
+- Commit title matching `vX.Y.Z` (e.g. the version commit from `release.sh`)
+- Commit message containing `#release`
+
+The `release.yml` workflow auto-generates release notes, creates a GitHub release, and publishes to PyPI.
