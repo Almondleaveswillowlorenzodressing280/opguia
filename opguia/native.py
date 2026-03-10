@@ -29,8 +29,8 @@ def _configure_macos():
         from opguia._native_window import _open_window_with_icon
 
         native_mode._open_window = _open_window_with_icon
-    except ImportError:
-        pass
+    except Exception:
+        pass  # Falls back to default NiceGUI native window
 
 
 def _configure_windows():
