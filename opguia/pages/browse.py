@@ -1,4 +1,4 @@
-"""Browse page — sidebar + full-width tree + detail dialog + status bar."""
+"""Browse page — top bar, search, full-screen tree-table, status bar."""
 
 import asyncio
 from nicegui import ui
@@ -15,77 +15,77 @@ def register(client: OpcuaClient):
             ui.navigate.to("/")
             return
 
-        # -- Header --
-        with ui.header().classes("items-center justify-between px-4 py-2 min-h-0 bg-gray-900 border-b border-gray-700"):
-            ui.label("OPC UA Viewer").classes("text-base font-bold")
-
-            with ui.row().classes("items-center gap-4"):
+        # -- Top bar --
+        with ui.header().classes(
+            "items-center justify-between px-4 min-h-0 bg-gray-900 border-b border-gray-700"
+        ).style("height:36px"):
+            ui.label("OPC UA Browser").classes("text-sm font-bold")
+            with ui.row().classes("items-center gap-3"):
                 if client.server_name:
-                    ui.label(f"Server: {client.server_name}").classes("text-sm text-gray-300")
-                ui.badge("Connected", color="green").props("rounded")
+                    ui.label(f"Server: {client.server_name}").classes("text-xs text-gray-300")
+                ui.icon("circle", size="8px").classes("text-green-400")
 
                 async def do_disconnect():
                     await client.disconnect()
                     ui.navigate.to("/")
+                ui.button("Disconnect", on_click=do_disconnect).props("flat dense size=xs color=red")
 
-                ui.button(icon="settings", on_click=do_disconnect).props("flat dense round size=sm").classes("text-gray-400")
+        # -- Search bar --
+        with ui.row().classes(
+            "w-full items-center px-4 bg-gray-900/80 border-b border-gray-700"
+        ).style("height:34px; margin-top:36px"):
+            ui.icon("search", size="16px").classes("text-gray-500")
+            search_input = ui.input(placeholder="Filter nodes...").props(
+                "dense borderless"
+            ).classes("w-full text-xs").style("font-size:12px")
 
-        # -- Main layout --
-        with ui.row().classes("w-full h-screen pt-12 pb-8"):
-
-            # -- Left sidebar --
-            with ui.column().classes("w-72 shrink-0 h-full border-r border-gray-700 bg-gray-900/50 gap-0"):
-                # Search
-                with ui.row().classes("w-full p-3"):
-                    ui.input(placeholder="Search").props('dense outlined').classes("w-full text-sm").style(
-                        "font-size: 13px"
-                    )
-
-                ui.separator().classes("my-0")
-
-                # Connections section
-                with ui.column().classes("w-full gap-0 p-2"):
-                    ui.label("Connections").classes("text-xs text-gray-500 uppercase tracking-wide px-2 py-1")
-
-                    with ui.row().classes("items-center gap-2 px-2 py-2 bg-white/5 rounded w-full"):
-                        ui.icon("dns", size="20px").classes("text-blue-400")
-                        with ui.column().classes("gap-0"):
-                            ui.label(client.server_name or "OPC UA Server").classes("text-sm font-medium")
-                            ui.label(client.endpoint).classes("text-xs text-gray-500 font-mono")
-
-            # -- Tree area --
-            with ui.column().classes("flex-grow h-full overflow-auto gap-0"):
-                tree_container, rebuild_tree, set_root = create_tree_view(
-                    client, on_select_node=lambda nid: show_detail_dialog(nid)
-                )
+        # -- Tree (fills remaining space) --
+        tree_scroll = ui.scroll_area().classes("w-full").style(
+            "position:fixed; top:70px; bottom:28px; left:0; right:0"
+        )
+        with tree_scroll:
+            tree_container, rebuild_tree, set_root = create_tree_view(
+                client,
+                on_select_node=lambda nid: show_detail_dialog(nid),
+            )
 
         # -- Status bar --
-        with ui.footer().classes("items-center justify-start gap-6 px-4 py-1 min-h-0 bg-gray-900 border-t border-gray-700"):
-            ui.label(f"Endpoint: {client.endpoint}").classes("text-xs text-gray-400 font-mono")
-            ui.label(f"Security: {client.security_policy}").classes("text-xs text-gray-400")
-            latency_label = ui.label("Latency: ...").classes("text-xs text-gray-400")
+        with ui.element("div").classes(
+            "flex items-center gap-6 px-4 bg-gray-900 border-t border-gray-700 text-gray-500"
+        ).style("position:fixed; bottom:0; left:0; right:0; height:28px; font-size:11px"):
+            ui.label(client.endpoint).classes("font-mono")
+            ui.label(f"Security: {client.security_policy}")
+            latency_label = ui.label("Latency: ...")
 
-        # Measure latency periodically
+        # -- Search filtering --
+        async def on_search_change():
+            query = search_input.value.strip().lower()
+            await rebuild_tree(filter_query=query)
+
+        search_input.on("keydown.enter", lambda: on_search_change())
+        # Also filter on clear
+        search_input.on("update:model-value", lambda e: on_search_change() if not search_input.value else None)
+
+        # -- Latency polling --
         async def update_latency():
             while client.connected:
                 ms = await client.measure_latency()
                 if ms is not None:
                     latency_label.text = f"Latency: {ms} ms"
                 await asyncio.sleep(5)
-
         asyncio.create_task(update_latency())
 
-        # -- Detail dialog (shown on node click) --
+        # -- Detail dialog --
         async def show_detail_dialog(node_id: str):
             with ui.dialog().classes("w-full max-w-lg") as dlg, ui.card().classes("w-full p-4"):
                 _container, show_details = create_detail_panel(
                     client,
-                    on_set_root=lambda nid, name: _set_root_and_close(dlg, nid, name),
+                    on_set_root=lambda nid, name: _set_root_close(dlg, nid, name),
                 )
             dlg.open()
             await show_details(node_id)
 
-        async def _set_root_and_close(dlg, nid, name):
+        async def _set_root_close(dlg, nid, name):
             dlg.close()
             await set_root(nid, name)
 
