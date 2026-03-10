@@ -57,14 +57,27 @@ def create_detail_panel(client: OpcuaClient, on_set_root=None):
                     ui.label(label).classes("text-xs text-gray-500 w-24 shrink-0 text-right")
                     ui.label(str(val)).classes("text-xs font-mono break-all")
 
-            # Value display + write for variables
+            # Value display for variables
             if info["is_variable"]:
                 ui.separator().classes("my-1")
-                ui.label("Value").classes("text-xs text-gray-500")
-                val_str = str(info.get("value", "—"))
-                ui.label(val_str).classes("text-sm font-mono text-green-300 break-all")
+                val = info.get("value", "—")
+                val_str = str(val)
+                is_error = isinstance(val, str) and val.startswith("Error:")
+                is_complex = info.get("data_type") in ("ExtensionObject", "22")
 
-                if info.get("writable"):
+                ui.label("Value").classes("text-xs text-gray-500")
+                if is_error:
+                    ui.label(val_str).classes("text-sm font-mono text-red-400 break-all")
+                elif is_complex:
+                    ui.label("(complex type — browse children to inspect)").classes(
+                        "text-sm font-mono text-gray-400 italic"
+                    )
+                else:
+                    ui.label(val_str).classes("text-sm font-mono text-green-300 break-all")
+
+                # Only show write for writable, non-error, non-complex values
+                can_write = info.get("writable") and not is_error and not is_complex
+                if can_write:
                     ui.separator().classes("my-1")
                     ui.label("Write Value").classes("text-xs text-gray-500")
                     write_input = ui.input(value=val_str).props("dense").classes("w-full font-mono text-sm")
