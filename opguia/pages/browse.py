@@ -147,9 +147,16 @@ def register(client: OpcuaClient, settings: Settings):
                     ).classes("flex-grow").style("font-size:12px")
 
                 # Tree (scrollable, fills remaining height)
+                def _on_root_changed(node_id, path):
+                    settings.tree_root = node_id
+                    settings.tree_root_path = path
+
                 with ui.scroll_area().classes("w-full").style("flex:1; min-height:0"):
                     tree_container, rebuild_tree, set_root, poll_values = create_tree_view(
                         client, on_select_node=lambda nid: show_detail_dialog(nid),
+                        on_root_changed=_on_root_changed,
+                        initial_root=settings.tree_root,
+                        initial_path=settings.tree_root_path,
                     )
 
                 # Watch panel (bottom, collapsible)

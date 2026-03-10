@@ -236,10 +236,16 @@ class OpcuaClient:
                 for (idx, _nid), nr in zip(needs_type_resolve, name_results):
                     entry = entries[idx]
                     if isinstance(nr, Exception) or not nr or not nr.Text:
-                        # Couldn't resolve — fall back to VariantType if available
                         entry["data_type"] = "Unknown"
                     else:
                         entry["data_type"] = nr.Text
+                    # Try to refine from the decoded value (e.g. decoded struct class name)
+                    val = entry.get("value")
+                    if val is not None and val != "?":
+                        real = type(val).__name__
+                        if real not in ("ExtensionObject", "NoneType", "bytes", "str",
+                                        "int", "float", "bool", "list", "dict"):
+                            entry["data_type"] = real
                     # Custom/non-primitive types are struct-like — mark expandable
                     entry["has_children"] = True
 

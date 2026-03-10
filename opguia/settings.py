@@ -35,6 +35,8 @@ def _new_profile(name: str, url: str) -> dict:
         "url": url,
         "allow_writes": False,
         "watched": [],
+        "tree_root": None,      # node_id string or None (Objects)
+        "tree_root_path": [],   # breadcrumb path list
     }
 
 
@@ -121,6 +123,32 @@ class Settings:
         p = self.active_profile
         if p:
             p["allow_writes"] = value
+            self._save()
+
+    # ── Tree root (per-profile) ──
+
+    @property
+    def tree_root(self) -> str | None:
+        p = self.active_profile
+        return p.get("tree_root") if p else None
+
+    @tree_root.setter
+    def tree_root(self, value: str | None):
+        p = self.active_profile
+        if p:
+            p["tree_root"] = value
+            self._save()
+
+    @property
+    def tree_root_path(self) -> list[str]:
+        p = self.active_profile
+        return p.get("tree_root_path", []) if p else []
+
+    @tree_root_path.setter
+    def tree_root_path(self, value: list[str]):
+        p = self.active_profile
+        if p:
+            p["tree_root_path"] = value
             self._save()
 
     # ── Watched variables (per-profile) ──

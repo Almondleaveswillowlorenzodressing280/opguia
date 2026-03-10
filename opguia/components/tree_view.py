@@ -32,11 +32,12 @@ _TYPE_COLORS = {
 _ROW_H = "26px"
 
 
-def create_tree_view(client: OpcuaClient, on_select_node):
+def create_tree_view(client: OpcuaClient, on_select_node, on_root_changed=None,
+                     initial_root=None, initial_path=None):
     """Create the tree view. Returns (container, rebuild_fn, set_root_fn, poll_values_fn)."""
 
     # Current root node for the tree (None = Objects folder)
-    root_state = {"node_id": None, "path": []}
+    root_state = {"node_id": initial_root, "path": list(initial_path or [])}
     tree_container = ui.column().classes("w-full gap-0 select-none")
 
     # Track rendered variable value labels for polling: {node_id: label_element}
@@ -51,6 +52,8 @@ def create_tree_view(client: OpcuaClient, on_select_node):
             root_state["node_id"] = node_id
             if name:
                 root_state["path"].append(name)
+        if on_root_changed:
+            on_root_changed(root_state["node_id"], list(root_state["path"]))
         await rebuild_tree()
 
     async def poll_values():

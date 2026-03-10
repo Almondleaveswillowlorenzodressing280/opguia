@@ -9,6 +9,57 @@ from nicegui import ui
 from opguia.client import OpcuaClient
 from opguia.settings import Settings
 
+# Type hints and validation for write inputs
+_TYPE_HINTS = {
+    "Boolean": "true / false",
+    "Float": "decimal number",
+    "Double": "decimal number",
+    "Int16": "integer (-32768..32767)",
+    "Int32": "integer",
+    "Int64": "integer",
+    "UInt16": "integer (0..65535)",
+    "UInt32": "integer (0..4294967295)",
+    "UInt64": "integer (0+)",
+    "Byte": "integer (0..255)",
+    "SByte": "integer (-128..127)",
+    "String": "text",
+}
+
+_INT_TYPES = {"Int16", "Int32", "Int64", "UInt16", "UInt32", "UInt64", "Byte", "SByte"}
+_FLOAT_TYPES = {"Float", "Double"}
+
+_INT_RANGES = {
+    "Int16": (-32768, 32767),
+    "Int32": (-2147483648, 2147483647),
+    "Int64": (-9223372036854775808, 9223372036854775807),
+    "UInt16": (0, 65535),
+    "UInt32": (0, 4294967295),
+    "UInt64": (0, 18446744073709551615),
+    "Byte": (0, 255),
+    "SByte": (-128, 127),
+}
+
+
+def _validate_write(raw: str, data_type: str) -> str | None:
+    """Validate a write value. Returns error string or None if valid."""
+    if data_type in _INT_TYPES:
+        try:
+            v = int(raw)
+        except ValueError:
+            return f"Expected integer, got '{raw}'"
+        lo, hi = _INT_RANGES.get(data_type, (None, None))
+        if lo is not None and not (lo <= v <= hi):
+            return f"Out of range for {data_type}: {lo}..{hi}"
+    elif data_type in _FLOAT_TYPES:
+        try:
+            float(raw)
+        except ValueError:
+            return f"Expected number, got '{raw}'"
+    elif data_type == "Boolean":
+        if raw.lower() not in ("true", "false", "1", "0", "yes", "no"):
+            return "Expected true/false, 1/0, or yes/no"
+    return None
+
 
 def create_detail_panel(
     client: OpcuaClient,
@@ -112,13 +163,24 @@ def create_detail_panel(
 
                 # Write form (only for writable, non-error, non-complex variables)
                 if can_write:
+                    dt = info.get("data_type", "")
+                    hint = _TYPE_HINTS.get(dt, "")
                     write_status = ui.label("").classes("text-xs")
                     with ui.row().classes("items-center gap-2 w-full"):
-                        write_input = ui.input(value=val_str).props(
-                            "dense outlined"
-                        ).classes("flex-grow font-mono text-sm")
+                        write_input = ui.input(
+                            value=val_str,
+                            placeholder=hint,
+                        ).props("dense outlined").classes("flex-grow font-mono text-sm")
+                        if hint:
+                            write_input.tooltip(f"Type: {dt} ({hint})")
 
-                        async def do_write(nid=node_id, inp=write_input, st=write_status):
+                        async def do_write(nid=node_id, inp=write_input, st=write_status, dtype=dt):
+                            # Validate before writing
+                            err = _validate_write(inp.value, dtype)
+                            if err:
+                                st.text = err
+                                st.classes(remove="text-green-400", add="text-red-400")
+                                return
                             st.text = "Writing..."
                             st.classes(remove="text-red-400 text-green-400")
                             try:
