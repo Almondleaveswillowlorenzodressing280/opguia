@@ -2,13 +2,15 @@
 
 from nicegui import ui
 from opguia.client import OpcuaClient
+from opguia.settings import Settings
 from opguia.pages import connection, browse
 
 
 def run():
     client = OpcuaClient()
-    connection.register(client)
-    browse.register(client)
+    settings = Settings()
+    connection.register(client, settings)
+    browse.register(client, settings)
     ui.run(
         title="OPGuia",
         favicon="🔌",

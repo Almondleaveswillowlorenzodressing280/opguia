@@ -7,10 +7,22 @@ writing: value + write input at top, full attribute details collapsed below.
 import asyncio
 from nicegui import ui
 from opguia.client import OpcuaClient
+from opguia.settings import Settings
 
 
-def create_detail_panel(client: OpcuaClient, on_set_root=None):
-    """Create the detail panel. Returns (container, show_details_fn)."""
+def create_detail_panel(
+    client: OpcuaClient,
+    on_set_root=None,
+    writes_enabled=None,
+    on_favorite_toggle=None,
+    settings: Settings | None = None,
+):
+    """Create the detail panel. Returns (container, show_details_fn).
+
+    writes_enabled: callable returning bool — write form only appears when True.
+    on_favorite_toggle: callback when a favorite is added/removed.
+    settings: Settings instance for favorite management.
+    """
     container = ui.column().classes("w-full gap-2")
 
     async def show_details(node_id: str):
@@ -29,10 +41,27 @@ def create_detail_panel(client: OpcuaClient, on_set_root=None):
 
         container.clear()
         with container:
-            # ── Header: name + node class ──
+            # ── Header: name + node class + favorite toggle ──
             with ui.row().classes("items-center gap-2 w-full"):
                 ui.label(info["display_name"]).classes("text-lg font-bold")
                 ui.label(info.get("node_class", "")).classes("text-xs text-gray-500")
+                if settings:
+                    is_fav = settings.is_favorite(node_id)
+                    fav_icon = "star" if is_fav else "star_border"
+                    fav_color = "text-yellow-500" if is_fav else "text-gray-500"
+
+                    def toggle_fav(nid=node_id, name=info["display_name"]):
+                        if settings.is_favorite(nid):
+                            settings.remove_favorite(nid)
+                        else:
+                            settings.add_favorite(name, nid)
+                        if on_favorite_toggle:
+                            on_favorite_toggle()
+                        asyncio.ensure_future(show_details(nid))
+
+                    ui.button(icon=fav_icon, on_click=toggle_fav).props(
+                        "flat dense round size=sm"
+                    ).classes(fav_color + " ml-auto")
 
             is_var = info["is_variable"]
             is_complex = info.get("is_complex", False)
@@ -42,7 +71,8 @@ def create_detail_panel(client: OpcuaClient, on_set_root=None):
                 val = info.get("value", "—")
                 val_str = str(val)
                 is_error = isinstance(val, str) and val.startswith("Error:")
-                can_write = info.get("writable") and not is_error and not is_complex
+                writes_ok = writes_enabled() if writes_enabled else True
+                can_write = info.get("writable") and not is_error and not is_complex and writes_ok
 
                 # Current value + data type
                 with ui.row().classes("items-center gap-2 w-full"):

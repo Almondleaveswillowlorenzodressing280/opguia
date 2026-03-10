@@ -33,11 +33,14 @@ _ROW_H = "26px"
 
 
 def create_tree_view(client: OpcuaClient, on_select_node):
-    """Create the tree view. Returns (container, rebuild_fn, set_root_fn)."""
+    """Create the tree view. Returns (container, rebuild_fn, set_root_fn, poll_values_fn)."""
 
     # Current root node for the tree (None = Objects folder)
     root_state = {"node_id": None, "path": []}
     tree_container = ui.column().classes("w-full gap-0 select-none")
+
+    # Track rendered variable value labels for polling: {node_id: label_element}
+    _value_labels: dict[str, ui.label] = {}
 
     async def set_root(node_id: str | None, name: str | None = None):
         """Change the tree root to a specific node (or reset to Objects)."""
@@ -50,8 +53,27 @@ def create_tree_view(client: OpcuaClient, on_select_node):
                 root_state["path"].append(name)
         await rebuild_tree()
 
+    async def poll_values():
+        """Re-read all visible variable values and update their labels."""
+        if not _value_labels or not client.connected:
+            return
+        node_ids = list(_value_labels.keys())
+        for nid in node_ids:
+            lbl = _value_labels.get(nid)
+            if lbl is None:
+                continue
+            try:
+                val = await client.read_value(nid)
+                val_text = str(val) if val is not None else ""
+                if len(val_text) > 30:
+                    val_text = val_text[:30] + ".."
+                lbl.text = val_text
+            except Exception:
+                pass
+
     async def rebuild_tree(filter_query: str = ""):
         """Clear and rebuild the entire tree from the current root."""
+        _value_labels.clear()
         tree_container.clear()
         with tree_container:
             # Root row — always starts expanded
@@ -148,15 +170,16 @@ def create_tree_view(client: OpcuaClient, on_select_node):
             # Name (flexible width)
             ui.label(node["name"]).classes("text-xs font-medium truncate").style("min-width:120px; flex:1")
 
-            # Inline value (fixed width)
+            # Inline value (fixed width) — tracked for polling
             val = node["value"]
             if val is not None and val != "?":
                 val_text = str(val)
                 if len(val_text) > 30:
                     val_text = val_text[:30] + ".."
-                ui.label(val_text).classes(
+                val_lbl = ui.label(val_text).classes(
                     "text-xs font-mono text-gray-200 text-right truncate"
                 ).style("width:140px; flex-shrink:0")
+                _value_labels[node["id"]] = val_lbl
             else:
                 ui.element("div").style("width:140px; flex-shrink:0")
 
@@ -224,7 +247,7 @@ def create_tree_view(client: OpcuaClient, on_select_node):
         row.on("click", lambda nid=node["id"]: toggle(nid))
         row.on("dblclick", lambda nid=node["id"]: on_select_node(nid))
 
-    return tree_container, rebuild_tree, set_root
+    return tree_container, rebuild_tree, set_root, poll_values
 
 
 def _make_row(indent: int):

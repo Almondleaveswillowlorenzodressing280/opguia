@@ -1,17 +1,17 @@
 """Connection page — endpoint input, server scan, connect.
 
-Landing page at "/". Shows an endpoint input field and auto-scans
-for local OPC UA servers on common ports. Clicking a discovered
-server fills the endpoint field. Connect navigates to /browse.
+Landing page at "/". Shows an endpoint input field, saved connections,
+and auto-scans for local OPC UA servers on common ports.
 """
 
 import asyncio
 from nicegui import ui
 from opguia.client import OpcuaClient
 from opguia.scanner import scan_servers
+from opguia.settings import Settings
 
 
-def register(client: OpcuaClient):
+def register(client: OpcuaClient, settings: Settings):
     @ui.page("/")
     async def connection_page():
         ui.dark_mode().enable()
@@ -36,7 +36,53 @@ def register(client: OpcuaClient):
                         status.text = str(e)
                         status.classes(add="text-red-400")
 
-                ui.button("Connect", on_click=do_connect).classes("w-full")
+                with ui.row().classes("w-full gap-2"):
+                    ui.button("Connect", on_click=do_connect).classes("flex-grow")
+                    ui.button(
+                        icon="bookmark_add",
+                        on_click=lambda: save_connection(endpoint.value),
+                    ).props("flat dense").tooltip("Save connection")
+
+            # Saved connections
+            saved_card = ui.card().classes("w-96 p-4")
+
+            def render_saved():
+                saved_card.clear()
+                with saved_card:
+                    ui.label("Saved Connections").classes("text-sm font-bold")
+                    conns = settings.connections
+                    if not conns:
+                        ui.label("No saved connections").classes("text-xs text-gray-500 mt-1")
+                    else:
+                        with ui.column().classes("w-full gap-1 mt-2"):
+                            for url in conns:
+                                with ui.row().classes(
+                                    "items-center gap-2 w-full hover:bg-gray-800 rounded px-2 py-1"
+                                ):
+                                    pick_row = ui.row().classes(
+                                        "items-center gap-2 flex-grow cursor-pointer min-w-0"
+                                    )
+                                    with pick_row:
+                                        ui.icon("bookmark", size="14px").classes("text-blue-400 shrink-0")
+                                        ui.label(url).classes("text-xs font-mono truncate")
+
+                                    def pick(u=url):
+                                        endpoint.value = u
+                                    pick_row.on("click", pick)
+
+                                    def remove(u=url):
+                                        settings.remove_connection(u)
+                                        render_saved()
+
+                                    ui.button(
+                                        icon="close", on_click=remove,
+                                    ).props("flat dense round size=xs").classes("text-gray-500 shrink-0")
+
+            def save_connection(url: str):
+                settings.add_connection(url)
+                render_saved()
+
+            render_saved()
 
             # Auto-discovered servers
             with ui.card().classes("w-96 p-4"):
