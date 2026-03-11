@@ -2,11 +2,10 @@
 
 Layout (all flexbox, no calc):
   ┌─────────────────────────────────┐
-  │ Top bar (40px, shrink-0)        │
+  │ Top bar (40px) with view tabs   │
   ├────────┬────────────────────────┤
-  │Sidebar │ Search bar (32px)      │  ← middle row (flex:1)
-  │(200px) │ Tree (flex:1 scroll)   │
-  │        │ Watch panel (bottom)   │
+  │Sidebar │ Content (tree/graph)   │  ← middle row (flex:1)
+  │(280px) │                        │
   ├────────┴────────────────────────┤
   │ Bottom bar (24px, shrink-0)     │
   └─────────────────────────────────┘
@@ -18,15 +17,18 @@ from pathlib import Path
 from nicegui import app, ui
 from opguia.client import OpcuaClient
 from opguia.storage import Settings
-from opguia.components.tree_view import create_tree_view
-from opguia.components.detail_panel import create_detail_panel
-from opguia.components.watch_panel import create_watch_panel
+from opguia.theme import apply_theme
+from opguia.pages.browse.tree_view import create_tree_view
+from opguia.pages.browse.detail_panel import create_detail_panel
+from opguia.pages.browse.watch_panel import create_watch_panel
+from opguia.pages.browse.graph_panel import create_graph_panel
+from opguia.pages.browse.value_history import ValueHistory
 
 
 def register(client: OpcuaClient, settings: Settings, tunnel=None):
     @ui.page("/browse")
     async def browse_page():
-        ui.dark_mode().enable()
+        apply_theme()
         if not client.connected:
             ui.navigate.to("/")
             return
@@ -38,11 +40,8 @@ def register(client: OpcuaClient, settings: Settings, tunnel=None):
             settings.ensure_profile(client.endpoint, client.server_name)
             settings.set_active(client.endpoint)
 
-        # Override NiceGUI defaults — full-height flex column, no padding
-        ui.query("body").style("margin:0; overflow:hidden")
-        ui.query(".nicegui-content").classes("w-full h-screen").style(
-            "display:flex; flex-direction:column; padding:0; gap:0"
-        )
+        # Shared value history for watched variables
+        history = ValueHistory()
 
         # ── Top bar ──
         with ui.row().classes(
@@ -51,6 +50,14 @@ def register(client: OpcuaClient, settings: Settings, tunnel=None):
             with ui.row().classes("items-center gap-2"):
                 ui.image("/static/favicon.svg").classes("w-5 h-5")
                 ui.label("OPGuia").classes("text-sm font-bold")
+
+            # View tabs (center of header)
+            with ui.tabs().props(
+                "dense no-caps indicator-color=primary active-color=primary inline-label"
+            ).classes("bg-transparent").style("min-height:0") as tabs:
+                ui.tab("tree", icon="account_tree", label="Tree").style("font-size:11px; min-height:28px; padding:0 12px")
+                ui.tab("graph", icon="show_chart", label="Graph").style("font-size:11px; min-height:28px; padding:0 12px")
+
             with ui.row().classes("items-center gap-3"):
                 profile = settings.active_profile
                 profile_name = profile["name"] if profile else client.server_name
@@ -117,17 +124,32 @@ def register(client: OpcuaClient, settings: Settings, tunnel=None):
 
                 # Settings
                 ui.label("Settings").classes(
-                    "text-xs text-gray-500 uppercase tracking-wide px-3 pt-2 pb-1"
+                    "text-xs text-gray-500 uppercase tracking-wide px-3 pt-2 pb-2"
                 )
-                with ui.row().classes("items-center gap-2 px-3"):
+                with ui.column().classes("w-full gap-3 px-3"):
                     write_switch = ui.switch(
                         "Allow writes", value=settings.allow_writes,
-                    ).props("dense size=sm color=orange").classes("text-xs")
+                    ).props("dense color=orange").classes("text-sm")
 
                     def on_write_toggle(e):
                         settings.allow_writes = bool(e.args)
 
                     write_switch.on("update:model-value", on_write_toggle)
+
+                    with ui.column().classes("w-full gap-1"):
+                        ui.label("Poll rate").classes("text-xs text-gray-400")
+                        poll_options = [0.1, 0.25, 0.5, 1.0, 2.0]
+                        poll_select = ui.toggle(
+                            {v: f"{v}s" for v in poll_options},
+                            value=settings.poll_interval if settings.poll_interval in poll_options else 0.1,
+                        ).props("dense no-caps rounded size=sm color=grey-8 toggle-color=primary").classes(
+                            "w-full"
+                        ).style("font-size:11px")
+
+                        def on_poll_change(e):
+                            settings.poll_interval = float(e.args)
+
+                        poll_select.on("update:model-value", on_poll_change)
 
                 ui.separator().classes("my-2 mx-2")
 
@@ -179,86 +201,104 @@ def register(client: OpcuaClient, settings: Settings, tunnel=None):
 
             # Main content area (fills remaining width)
             with ui.column().classes("h-full gap-0 overflow-hidden min-w-0").style("flex:1"):
-                # Search bar (fixed height)
-                with ui.row().classes(
-                    "w-full items-center px-3 border-b border-gray-700 shrink-0 gap-1"
-                ).style("height:32px; min-height:32px"):
-                    ui.icon("search", size="14px").classes("text-gray-500")
-                    search_input = ui.input(placeholder="Filter nodes...").props(
-                        "dense borderless"
-                    ).classes("flex-grow").style("font-size:12px")
-                    collapse_btn = ui.button(icon="unfold_less", on_click=lambda: collapse_all()).props(
-                        "flat dense round size=sm"
-                    ).classes("text-gray-400").tooltip("Collapse all")
-                    expand_btn = ui.button(icon="unfold_more", on_click=lambda: expand_all()).props(
-                        "flat dense round size=sm"
-                    ).classes("text-gray-400").tooltip("Expand all (1 level)")
-                    export_btn = ui.button(icon="download").props(
-                        "flat dense round size=sm"
-                    ).classes("text-gray-400").tooltip("Export tree as JSON")
 
-                # Tree (scrollable, fills remaining height)
-                def _on_root_changed(node_id, path):
-                    settings.tree_root = node_id
-                    settings.tree_root_path = path
-                    settings.tree_expanded = []
-                    render_root_section()
+                with ui.tab_panels(tabs, value="tree").classes(
+                    "w-full bg-transparent"
+                ).style("flex:1; min-height:0"):
 
-                def _on_expand_changed(node_id, expanded):
-                    if expanded is False and node_id is None:
-                        # Full clear from collapse_all
-                        settings.tree_expanded = []
-                    elif expanded:
-                        settings.add_tree_expanded(node_id)
-                    else:
-                        settings.remove_tree_expanded(node_id)
+                    # ── Tree tab ──
+                    with ui.tab_panel("tree").classes("p-0 h-full").style(
+                        "display:flex; flex-direction:column"
+                    ):
+                        # Search bar (fixed height)
+                        with ui.row().classes(
+                            "w-full items-center px-3 border-b border-gray-700 shrink-0 gap-1"
+                        ).style("height:32px; min-height:32px"):
+                            ui.icon("search", size="14px").classes("text-gray-500")
+                            search_input = ui.input(placeholder="Filter nodes...").props(
+                                "dense borderless"
+                            ).classes("flex-grow").style("font-size:12px")
+                            collapse_btn = ui.button(icon="unfold_less", on_click=lambda: collapse_all()).props(
+                                "flat dense round size=sm"
+                            ).classes("text-gray-400").tooltip("Collapse all")
+                            expand_btn = ui.button(icon="unfold_more", on_click=lambda: expand_all()).props(
+                                "flat dense round size=sm"
+                            ).classes("text-gray-400").tooltip("Expand all (1 level)")
+                            export_btn = ui.button(icon="download").props(
+                                "flat dense round size=sm"
+                            ).classes("text-gray-400").tooltip("Export tree as JSON")
 
-                with ui.scroll_area().classes("w-full").style("flex:1; min-height:0"):
-                    tree_container, rebuild_tree, set_root, poll_values, export_tree, collapse_all, expand_all = create_tree_view(
-                        client, on_select_node=lambda nid: show_detail_dialog(nid),
-                        on_root_changed=_on_root_changed,
-                        initial_root=settings.tree_root,
-                        initial_path=settings.tree_root_path,
-                        initial_expanded=settings.tree_expanded,
-                        on_expand_changed=_on_expand_changed,
-                    )
+                        # Tree (scrollable, fills remaining height)
+                        def _on_root_changed(node_id, path):
+                            settings.tree_root = node_id
+                            settings.tree_root_path = path
+                            settings.tree_expanded = []
+                            render_root_section()
 
-                async def _do_export():
-                    # Native save dialog via pywebview
-                    result = await app.native.main_window.create_file_dialog(
-                        dialog_type=30,  # SAVE
-                        save_filename="tree.json",
-                        file_types=("JSON files (*.json)",),
-                    )
-                    if not result:
-                        return
-                    path = result if isinstance(result, str) else result[0]
-                    export_btn.props("loading")
-                    try:
-                        tree_data = await export_tree()
-                        content = json.dumps(tree_data, indent=2, ensure_ascii=False)
-                        Path(path).write_text(content, encoding="utf-8")
-                        ui.notify(f"Saved to {path}", type="positive")
-                    except Exception as e:
-                        ui.notify(f"Export failed: {e}", type="negative")
-                    finally:
-                        export_btn.props(remove="loading")
+                        def _on_expand_changed(node_id, expanded):
+                            if expanded is False and node_id is None:
+                                # Full clear from collapse_all
+                                settings.tree_expanded = []
+                            elif expanded:
+                                settings.add_tree_expanded(node_id)
+                            else:
+                                settings.remove_tree_expanded(node_id)
 
-                export_btn.on("click", _do_export)
+                        with ui.scroll_area().classes("w-full").style("flex:1; min-height:0"):
+                            tree_container, rebuild_tree, set_root, poll_values, export_tree, collapse_all, expand_all = create_tree_view(
+                                client, on_select_node=lambda nid: show_detail_dialog(nid),
+                                on_root_changed=_on_root_changed,
+                                initial_root=settings.tree_root,
+                                initial_path=settings.tree_root_path,
+                                initial_expanded=settings.tree_expanded,
+                                on_expand_changed=_on_expand_changed,
+                            )
 
-                # Watch panel (bottom, collapsible)
-                has_watched = bool(settings.watched)
-                with ui.expansion(
-                    "Watch", value=has_watched,
-                ).classes("w-full border-t border-gray-700").props("dense header-class='text-xs bg-gray-900'"):
-                    with ui.scroll_area().style("max-height:200px"):
-                        watch_ct, render_watch, poll_watch = create_watch_panel(
-                            client, settings,
-                            on_select_node=lambda nid: show_detail_dialog(nid),
-                            on_watch_changed=lambda: render_watched_sidebar(),
+                        async def _do_export():
+                            # Native save dialog via pywebview
+                            result = await app.native.main_window.create_file_dialog(
+                                dialog_type=30,  # SAVE
+                                save_filename="tree.json",
+                                file_types=("JSON files (*.json)",),
+                            )
+                            if not result:
+                                return
+                            path = result if isinstance(result, str) else result[0]
+                            export_btn.props("loading")
+                            try:
+                                tree_data = await export_tree()
+                                content = json.dumps(tree_data, indent=2, ensure_ascii=False)
+                                Path(path).write_text(content, encoding="utf-8")
+                                ui.notify(f"Saved to {path}", type="positive")
+                            except Exception as e:
+                                ui.notify(f"Export failed: {e}", type="negative")
+                            finally:
+                                export_btn.props(remove="loading")
+
+                        export_btn.on("click", _do_export)
+
+                        # Watch panel (bottom, collapsible)
+                        has_watched = bool(settings.watched)
+                        with ui.expansion(
+                            "Watch", value=has_watched,
+                        ).classes("w-full border-t border-gray-700").props("dense header-class='text-xs bg-gray-900'"):
+                            with ui.scroll_area().style("max-height:200px"):
+                                watch_ct, render_watch, poll_watch = create_watch_panel(
+                                    client, settings,
+                                    on_select_node=lambda nid: show_detail_dialog(nid),
+                                    on_watch_changed=lambda: _on_watch_changed(),
+                                )
+
+                        render_watch()
+
+                    # ── Graph tab ──
+                    with ui.tab_panel("graph").classes("p-0 h-full").style(
+                        "display:flex; flex-direction:column"
+                    ):
+                        graph_ct, rebuild_graph, update_graph = create_graph_panel(
+                            settings, history,
                         )
-
-                render_watch()
+                        rebuild_graph()
 
         # ── Bottom bar ──
         with ui.row().classes(
@@ -310,10 +350,17 @@ def register(client: OpcuaClient, settings: Settings, tunnel=None):
 
         async def update_values():
             while client.connected:
-                await asyncio.sleep(2)
+                await asyncio.sleep(settings.poll_interval)
                 try:
                     await poll_values()
                     await poll_watch()
+                    # Batch-read watched values for history
+                    watched_ids = [item["node_id"] for item in settings.watched]
+                    if watched_ids:
+                        values = await client.read_values(watched_ids)
+                        for nid, val in values.items():
+                            history.record(nid, val)
+                    update_graph()
                 except Exception:
                     pass
 
@@ -338,6 +385,7 @@ def register(client: OpcuaClient, settings: Settings, tunnel=None):
         def _on_watch_changed():
             render_watched_sidebar()
             render_watch()
+            rebuild_graph()
 
         async def _set_root_close(nid, name):
             detail_dlg.close()

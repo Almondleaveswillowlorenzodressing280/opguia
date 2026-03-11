@@ -11,6 +11,7 @@ from nicegui import ui
 from opguia.client import OpcuaClient
 from opguia.scanner import scan_servers
 from opguia.storage import Settings
+from opguia.theme import apply_theme
 from opguia.tunnel import SSHTunnel
 from opguia.utils import DEFAULT_OPC_PORT
 
@@ -48,11 +49,7 @@ def register(client: OpcuaClient, settings: Settings, tunnel: SSHTunnel = None):
 
     @ui.page("/")
     async def connection_page():
-        ui.dark_mode().enable()
-        ui.query("body").style("margin:0; overflow:hidden")
-        ui.query(".nicegui-content").classes("w-full h-screen").style(
-            "display:flex; flex-direction:column; padding:0; gap:0"
-        )
+        apply_theme()
 
         # ── Header ──
         with ui.row().classes("w-full items-center justify-center gap-3 py-6 shrink-0"):

@@ -75,6 +75,7 @@ class Settings:
             else:
                 self._data = {}
         self._data.setdefault("profiles", [])
+        self._data.setdefault("poll_interval", 0.1)
 
     def _save(self):
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -227,6 +228,18 @@ class Settings:
 
     def is_watched(self, node_id: str) -> bool:
         return any(item["node_id"] == node_id for item in self.watched)
+
+    # ── Global settings ──
+
+    @property
+    def poll_interval(self) -> float:
+        """Value polling interval in seconds (default 0.1)."""
+        return self._data.get("poll_interval", 0.1)
+
+    @poll_interval.setter
+    def poll_interval(self, value: float):
+        self._data["poll_interval"] = max(0.05, min(value, 10.0))
+        self._save()
 
     # ── Aliases ──
 

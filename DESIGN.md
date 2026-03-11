@@ -58,10 +58,14 @@ opguia/
   utils.py            # type conversion, formatting
   static/             # favicon.svg, icon.png, icon.ico
   pages/
-    connection.py     # connect page
-    browse.py         # main browse page
-  components/
-    tree_view.py      # tree-table rendering
-    detail_panel.py   # node detail dialog + write
-    watch_panel.py    # live variable watch panel
+    connection/
+      page.py         # connect page
+    browse/
+      page.py         # main browse page
+      tree_view.py    # tree-table rendering
+      detail_panel.py # node detail dialog + write
+      watch_panel.py  # live variable watch panel
+      graph_panel.py  # live time-series charts
+      node_rows.py    # shared row rendering
+      value_history.py # timestamped value ring buffer
 ```

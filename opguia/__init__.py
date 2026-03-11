@@ -1,3 +1,3 @@
 """OPGuia — Dead simple OPC UA browser."""
 
-__version__ = "1.7.2"
+__version__ = "1.8.0"

@@ -7,7 +7,7 @@ children (complex structs) expand on click, detail on double-click.
 
 from nicegui import ui
 from opguia.client import OpcuaClient
-from opguia.components.node_rows import (
+from opguia.pages.browse.node_rows import (
     format_val, serialize, make_row, ROW_H,
     STATUS_COLORS, TYPE_ICONS, TYPE_COLORS,
     _load as _shared_load,

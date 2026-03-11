@@ -399,6 +399,23 @@ class OpcuaClient:
             raise RuntimeError("Not connected")
         return await self.client.get_node(node_id).read_value()
 
+    async def read_values(self, node_ids: list[str]) -> dict[str, any]:
+        """Read multiple node values in parallel. Returns {node_id: value}.
+
+        Failed reads are silently omitted from the result.
+        """
+        if not self.client or not node_ids:
+            return {}
+        nodes = [self.client.get_node(nid) for nid in node_ids]
+        results = await asyncio.gather(
+            *[n.read_value() for n in nodes],
+            return_exceptions=True,
+        )
+        return {
+            nid: val for nid, val in zip(node_ids, results)
+            if not isinstance(val, Exception)
+        }
+
     async def write_value(self, node_id: str, value, data_type: ua.VariantType | None = None) -> None:
         """Write a value to a variable node.
 

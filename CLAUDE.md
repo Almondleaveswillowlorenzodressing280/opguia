@@ -15,12 +15,14 @@ python main.py
 - `main.py` is the entry point, calls `opguia.app.run()`
 - `opguia/client.py` — async wrapper around asyncua (connect, browse, read, write, latency)
 - `opguia/scanner.py` — probes common OPC UA ports for server discovery
-- `opguia/pages/connection.py` — connection page with endpoint input + auto-scan
-- `opguia/pages/browse.py` — main browse page: sidebar + tree + watch panel + status bar + detail dialog
-- `opguia/components/node_rows.py` — shared tree-row rendering (icons, formatting, constants) used by tree_view and watch_panel
-- `opguia/components/tree_view.py` — tree rendering with typed icons, inline values, status dots
-- `opguia/components/detail_panel.py` — full node attributes + write form (used in dialog)
-- `opguia/components/watch_panel.py` — live-updating watched variable values (bottom panel)
+- `opguia/pages/connection/page.py` — connection page with endpoint input + auto-scan
+- `opguia/pages/browse/page.py` — main browse page: sidebar + tabbed content (tree/graph) + status bar + detail dialog
+- `opguia/pages/browse/node_rows.py` — shared tree-row rendering (icons, formatting, constants)
+- `opguia/pages/browse/tree_view.py` — tree rendering with typed icons, inline values, status dots
+- `opguia/pages/browse/detail_panel.py` — full node attributes + write form (used in dialog)
+- `opguia/pages/browse/watch_panel.py` — live-updating watched variable values (bottom panel)
+- `opguia/pages/browse/graph_panel.py` — live time-series EChart of watched variable values
+- `opguia/pages/browse/value_history.py` — FIFO ring buffer of timestamped values for graphing
 - `opguia/cli.py` — headless CLI for querying, reading, writing nodes without the GUI
 - `opguia/tunnel.py` — SSH port-forwarding tunnel manager (ssh -L subprocess)
 - `opguia/storage.py` — persistent settings and OS directory helpers (config, data, cache, log) via platformdirs

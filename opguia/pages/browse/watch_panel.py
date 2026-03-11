@@ -9,7 +9,7 @@ tree-style rows as the main tree view.
 from nicegui import ui
 from opguia.client import OpcuaClient
 from opguia.storage import Settings
-from opguia.components.node_rows import format_val, _load as load_children
+from opguia.pages.browse.node_rows import format_val, _load as load_children
 
 
 def create_watch_panel(
