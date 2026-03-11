@@ -401,34 +401,33 @@ def register(client: OpcuaClient, settings: Settings, tunnel: SSHTunnel = None):
                                 icon="delete", on_click=remove,
                             ).props("flat dense size=sm color=red").tooltip("Remove profile")
 
-                    # Continuous ping
-                    async def update_dot(url=prof["url"], d=dot, btn=prof_btn, lbl=status_label, p=prof):
-                        use_ssh = p.get("tunnel_enabled") and p.get("tunnel_ssh_host")
-                        # SSH pings are slower, so use a longer interval
-                        interval = 30 if use_ssh else 10
-                        while True:
-                            if use_ssh:
-                                reachable = await SSHTunnel.ping(
-                                    url,
-                                    ssh_host=p["tunnel_ssh_host"],
-                                    ssh_user=p.get("tunnel_ssh_user", ""),
-                                    ssh_port=p.get("tunnel_ssh_port", 22),
-                                )
-                            else:
-                                reachable = await _ping(url)
-                            if reachable:
-                                d.classes(remove="text-gray-600 text-red-500", add="text-green-500")
-                                lbl.text = "Online"
-                                lbl.classes(remove="text-gray-600 text-red-500", add="text-green-500")
-                                btn.props(remove="disable")
-                            else:
-                                d.classes(remove="text-gray-600 text-green-500", add="text-red-500")
-                                lbl.text = "Unreachable"
-                                lbl.classes(remove="text-gray-600 text-green-500", add="text-red-500")
-                                btn.props("disable")
-                            await asyncio.sleep(interval)
+                    # Continuous ping via ui.timer (holds a strong reference, preventing GC)
+                    use_ssh = prof.get("tunnel_enabled") and prof.get("tunnel_ssh_host")
+                    ping_interval = 30.0 if use_ssh else 10.0
 
-                    asyncio.create_task(update_dot())
+                    async def do_ping(url=prof["url"], d=dot, btn=prof_btn, lbl=status_label, p=prof):
+                        if p.get("tunnel_enabled") and p.get("tunnel_ssh_host"):
+                            reachable = await SSHTunnel.ping(
+                                url,
+                                ssh_host=p["tunnel_ssh_host"],
+                                ssh_user=p.get("tunnel_ssh_user", ""),
+                                ssh_port=p.get("tunnel_ssh_port", 22),
+                            )
+                        else:
+                            reachable = await _ping(url)
+                        if reachable:
+                            d.classes(remove="text-gray-600 text-red-500", add="text-green-500")
+                            lbl.text = "Online"
+                            lbl.classes(remove="text-gray-600 text-red-500", add="text-green-500")
+                            btn.props(remove="disable")
+                        else:
+                            d.classes(remove="text-gray-600 text-green-500", add="text-red-500")
+                            lbl.text = "Unreachable"
+                            lbl.classes(remove="text-gray-600 text-green-500", add="text-red-500")
+                            btn.props("disable")
+
+                    ui.timer(ping_interval, do_ping)
+                    ui.timer(0.1, do_ping, once=True)  # immediate first ping
 
                 render_saved()
 
