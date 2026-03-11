@@ -10,6 +10,7 @@ Each connection profile stores:
   - url:          OPC UA endpoint URL
   - allow_writes: whether writes are enabled for this connection
   - watched:      list of {name, node_id} for the watch window
+  - tree_expanded: list of node_id strings for expanded tree nodes
 """
 
 import json
@@ -37,6 +38,7 @@ def _new_profile(name: str, url: str) -> dict:
         "watched": [],
         "tree_root": None,      # node_id string or None (Objects)
         "tree_root_path": [],   # breadcrumb path list
+        "tree_expanded": [],    # list of expanded node_id strings
     }
 
 
@@ -149,6 +151,38 @@ class Settings:
         p = self.active_profile
         if p:
             p["tree_root_path"] = value
+            self._save()
+
+    # ── Tree expanded state (per-profile) ──
+
+    @property
+    def tree_expanded(self) -> list[str]:
+        p = self.active_profile
+        return p.get("tree_expanded", []) if p else []
+
+    @tree_expanded.setter
+    def tree_expanded(self, value: list[str]):
+        p = self.active_profile
+        if p:
+            p["tree_expanded"] = value
+            self._save()
+
+    def add_tree_expanded(self, node_id: str):
+        p = self.active_profile
+        if not p:
+            return
+        expanded = p.setdefault("tree_expanded", [])
+        if node_id not in expanded:
+            expanded.append(node_id)
+            self._save()
+
+    def remove_tree_expanded(self, node_id: str):
+        p = self.active_profile
+        if not p:
+            return
+        expanded = p.get("tree_expanded", [])
+        if node_id in expanded:
+            expanded.remove(node_id)
             self._save()
 
     # ── Watched variables (per-profile) ──

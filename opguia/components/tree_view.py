@@ -5,8 +5,25 @@ on click, variables open the detail dialog on click. Variables with
 children (complex structs) expand on click, detail on double-click.
 """
 
+import datetime
+
 from nicegui import ui
 from opguia.client import OpcuaClient
+
+
+def _serialize(value):
+    """Convert a value to a JSON-serializable form."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, datetime.datetime):
+        return value.isoformat()
+    if isinstance(value, (list, tuple)):
+        return [_serialize(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _serialize(v) for k, v in value.items()}
+    if isinstance(value, bytes):
+        return value.hex()
+    return str(value)
 
 # Status dot colors
 _STATUS_COLORS = {"good": "text-green-500", "warning": "text-yellow-400", "bad": "text-red-500"}
@@ -33,11 +50,14 @@ _ROW_H = "26px"
 
 
 def create_tree_view(client: OpcuaClient, on_select_node, on_root_changed=None,
-                     initial_root=None, initial_path=None):
+                     initial_root=None, initial_path=None,
+                     initial_expanded=None, on_expand_changed=None):
     """Create the tree view. Returns (container, rebuild_fn, set_root_fn, poll_values_fn)."""
 
     # Current root node for the tree (None = Objects folder)
     root_state = {"node_id": initial_root, "path": list(initial_path or [])}
+    # Set of node IDs that should be expanded on rebuild
+    _expanded: set[str] = set(initial_expanded or [])
     tree_container = ui.column().classes("w-full gap-0 select-none")
 
     # Track rendered variable value labels for polling: {node_id: label_element}
@@ -45,6 +65,7 @@ def create_tree_view(client: OpcuaClient, on_select_node, on_root_changed=None,
 
     async def set_root(node_id: str | None, name: str | None = None):
         """Change the tree root to a specific node (or reset to Objects)."""
+        _expanded.clear()
         if node_id is None:
             root_state["node_id"] = None
             root_state["path"] = []
@@ -199,21 +220,37 @@ def create_tree_view(client: OpcuaClient, on_select_node, on_root_changed=None,
 
         # Click behavior depends on whether the variable has expandable children
         if has_ch:
+            nid = node["id"]
+            should_expand = nid in _expanded
             child_ct = ui.column().classes("w-full gap-0")
-            exp = {"v": False}
+            exp = {"v": should_expand}
 
-            async def toggle(nid=node["id"], ct=child_ct, ar=arrow, ex=exp, d=depth):
+            if should_expand:
+                arrow.classes(add="rotate-90")
+
+            async def toggle(nid=nid, ct=child_ct, ar=arrow, ex=exp, d=depth):
                 if not ex["v"]:
                     ex["v"] = True
                     ar.classes(add="rotate-90")
+                    _expanded.add(nid)
+                    if on_expand_changed:
+                        on_expand_changed(nid, True)
                     await _load(ct, nid, d + 1, fq)
                 else:
                     ex["v"] = False
                     ar.classes(remove="rotate-90")
+                    _expanded.discard(nid)
+                    if on_expand_changed:
+                        on_expand_changed(nid, False)
                     ct.clear()
 
-            row.on("click", lambda nid=node["id"]: toggle(nid))
-            row.on("dblclick", lambda nid=node["id"]: on_select_node(nid))
+            row.on("click", lambda nid=nid: toggle(nid))
+            row.on("dblclick", lambda nid=nid: on_select_node(nid))
+
+            if should_expand:
+                async def auto_load_var(ct=child_ct, nid_=nid, d=depth):
+                    await _load(ct, nid_, d + 1, fq)
+                ui.timer(0, auto_load_var, once=True)
         else:
             # Simple variable — click opens detail dialog
             row.on("click", lambda nid=node["id"]: on_select_node(nid))
@@ -228,29 +265,91 @@ def create_tree_view(client: OpcuaClient, on_select_node, on_root_changed=None,
 
     def _render_folder(node, indent, depth, fq):
         """Render a folder/object row with expand/collapse."""
-        exp = {"v": False}
+        nid = node["id"]
+        should_expand = nid in _expanded
+        exp = {"v": should_expand}
         row = _make_row(indent)
         with row:
-            arrow = ui.icon("chevron_right", size="14px").classes("text-gray-500 transition-transform")
+            arrow = ui.icon(
+                "chevron_right" if not should_expand else "expand_more",
+                size="14px",
+            ).classes("text-gray-500 transition-transform")
+            if should_expand:
+                arrow.classes(add="rotate-90")
             ui.icon("folder", size="14px").classes("text-yellow-500")
             ui.label(node["name"]).classes("text-xs font-medium")
 
         child_ct = ui.column().classes("w-full gap-0")
 
-        async def toggle(nid=node["id"], ct=child_ct, ar=arrow, ex=exp, d=depth):
+        async def toggle(nid=nid, ct=child_ct, ar=arrow, ex=exp, d=depth):
             if not ex["v"]:
                 ex["v"] = True
                 ar.classes(add="rotate-90")
+                _expanded.add(nid)
+                if on_expand_changed:
+                    on_expand_changed(nid, True)
                 await _load(ct, nid, d + 1, fq)
             else:
                 ex["v"] = False
                 ar.classes(remove="rotate-90")
+                _expanded.discard(nid)
+                if on_expand_changed:
+                    on_expand_changed(nid, False)
                 ct.clear()
 
-        row.on("click", lambda nid=node["id"]: toggle(nid))
-        row.on("dblclick", lambda nid=node["id"]: on_select_node(nid))
+        row.on("click", lambda nid=nid: toggle(nid))
+        row.on("dblclick", lambda nid=nid: on_select_node(nid))
 
-    return tree_container, rebuild_tree, set_root, poll_values
+        # Auto-expand if this node was previously expanded
+        if should_expand:
+            async def auto_load(ct=child_ct, nid_=nid, d=depth):
+                await _load(ct, nid_, d + 1, fq)
+            ui.timer(0, auto_load, once=True)
+
+    async def export_tree() -> dict:
+        """Export the full tree recursively as a JSON-serializable dict."""
+        import asyncio as _aio
+
+        async def _export_node(node_id, name="Objects"):
+            entry = {"name": name, "node_id": node_id, "children": []}
+            try:
+                children = await client.browse_children(node_id)
+            except Exception:
+                return entry
+
+            # Build child entries and kick off sub-tree fetches in parallel
+            expandable = []  # (index, cid, child_name)
+            for child in children:
+                cid = child["id"]
+                child_entry = {
+                    "name": child["name"],
+                    "node_id": cid,
+                    "node_class": child.get("node_class", ""),
+                }
+                if child["is_variable"]:
+                    child_entry["data_type"] = child.get("data_type", "")
+                    child_entry["value"] = _serialize(child.get("value"))
+                    child_entry["status"] = child.get("status", "")
+                    child_entry["writable"] = child.get("writable", False)
+                entry["children"].append(child_entry)
+                if child.get("has_children"):
+                    expandable.append((len(entry["children"]) - 1, cid, child["name"]))
+
+            if expandable:
+                subs = await _aio.gather(
+                    *[_export_node(cid, cname) for _, cid, cname in expandable]
+                )
+                for (idx, _, _), sub in zip(expandable, subs):
+                    entry["children"][idx]["children"] = sub["children"]
+
+            return entry
+
+        root_name = "Objects"
+        if root_state["path"]:
+            root_name += " / " + " / ".join(root_state["path"])
+        return await _export_node(root_state["node_id"], root_name)
+
+    return tree_container, rebuild_tree, set_root, poll_values, export_tree
 
 
 def _make_row(indent: int):

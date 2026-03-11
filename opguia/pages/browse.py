@@ -13,7 +13,9 @@ Layout (all flexbox, no calc):
 """
 
 import asyncio
-from nicegui import ui
+import json
+from pathlib import Path
+from nicegui import app, ui
 from opguia.client import OpcuaClient
 from opguia.settings import Settings
 from opguia.components.tree_view import create_tree_view
@@ -147,19 +149,54 @@ def register(client: OpcuaClient, settings: Settings):
                     search_input = ui.input(placeholder="Filter nodes...").props(
                         "dense borderless"
                     ).classes("flex-grow").style("font-size:12px")
+                    export_btn = ui.button(icon="download").props(
+                        "flat dense round size=sm"
+                    ).classes("text-gray-400").tooltip("Export tree as JSON")
 
                 # Tree (scrollable, fills remaining height)
                 def _on_root_changed(node_id, path):
                     settings.tree_root = node_id
                     settings.tree_root_path = path
+                    settings.tree_expanded = []
+
+                def _on_expand_changed(node_id, expanded):
+                    if expanded:
+                        settings.add_tree_expanded(node_id)
+                    else:
+                        settings.remove_tree_expanded(node_id)
 
                 with ui.scroll_area().classes("w-full").style("flex:1; min-height:0"):
-                    tree_container, rebuild_tree, set_root, poll_values = create_tree_view(
+                    tree_container, rebuild_tree, set_root, poll_values, export_tree = create_tree_view(
                         client, on_select_node=lambda nid: show_detail_dialog(nid),
                         on_root_changed=_on_root_changed,
                         initial_root=settings.tree_root,
                         initial_path=settings.tree_root_path,
+                        initial_expanded=settings.tree_expanded,
+                        on_expand_changed=_on_expand_changed,
                     )
+
+                async def _do_export():
+                    # Native save dialog via pywebview
+                    result = await app.native.main_window.create_file_dialog(
+                        dialog_type=30,  # SAVE
+                        save_filename="tree.json",
+                        file_types=("JSON files (*.json)",),
+                    )
+                    if not result:
+                        return
+                    path = result if isinstance(result, str) else result[0]
+                    export_btn.props("loading")
+                    try:
+                        tree_data = await export_tree()
+                        content = json.dumps(tree_data, indent=2, ensure_ascii=False)
+                        Path(path).write_text(content, encoding="utf-8")
+                        ui.notify(f"Saved to {path}", type="positive")
+                    except Exception as e:
+                        ui.notify(f"Export failed: {e}", type="negative")
+                    finally:
+                        export_btn.props(remove="loading")
+
+                export_btn.on("click", _do_export)
 
                 # Watch panel (bottom, collapsible)
                 has_watched = bool(settings.watched)
