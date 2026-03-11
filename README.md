@@ -32,11 +32,15 @@ Opens a native desktop window. Enter an OPC UA endpoint or let it scan for local
 - Compact 26px rows — scan hundreds of variables at a glance
 - Filter nodes by name
 - Click to write writable variables (with type validation)
-- Collapsible detail view for full node attributes
+- Full node detail dialog with all attributes
 - Custom struct types resolved to their real names
 - Watch panel for live variable monitoring
+- Live time-series graphs per watched variable
+- Configurable poll rate (0.1s–2.0s)
 - Connection profiles with per-profile settings
-- Connection timeout (5s) with clear error messages
+- SSH port-forwarding tunnel support
+- Headless CLI mode (`opguia --headless`)
+- Material Dark theme
 - Native desktop window via pywebview
 - Custom app icon and name on macOS and Windows
 

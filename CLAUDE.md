@@ -28,6 +28,7 @@ python main.py
 - `opguia/storage.py` — persistent settings and OS directory helpers (config, data, cache, log) via platformdirs
 - `opguia/native.py` — platform-specific native window config (dock icon, app name, taskbar)
 - `opguia/_native_window.py` — pywebview child process wrapper for macOS icon/name (spawn-safe)
+- `opguia/theme.py` — centralized Material Dark theme (colors, CSS, page setup helper)
 - `opguia/utils.py` — shared constants and helpers (type conversion, timestamp formatting, access level bits)
 - `opguia/static/` — favicon (SVG), icon (PNG for macOS, ICO for Windows)
 
@@ -39,6 +40,8 @@ python main.py
 - NiceGUI dark mode is always enabled
 - Standard OPC UA port is 4840; scanner also checks 4841-4843, 48400-48401, 48010, 53530
 - Settings persist via `Settings` class in `storage.py` — passed to pages from `app.py`
+- Theme applied via `apply_theme()` from `theme.py` at the top of each `@ui.page` function
+- Page components colocated under their page directory (e.g. `pages/browse/tree_view.py`)
 
 ## Releasing
 

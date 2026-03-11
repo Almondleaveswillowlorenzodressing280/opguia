@@ -137,19 +137,19 @@ def register(client: OpcuaClient, settings: Settings, tunnel=None):
                     write_switch.on("update:model-value", on_write_toggle)
 
                     with ui.column().classes("w-full gap-1"):
-                        ui.label("Poll rate").classes("text-xs text-gray-400")
+                        ui.label("Poll rate").classes("text-sm text-gray-400")
                         poll_options = [0.1, 0.25, 0.5, 1.0, 2.0]
+
+                        def on_poll_change(e):
+                            settings.poll_interval = float(e.value)
+
                         poll_select = ui.toggle(
                             {v: f"{v}s" for v in poll_options},
                             value=settings.poll_interval if settings.poll_interval in poll_options else 0.1,
-                        ).props("dense no-caps rounded size=sm color=grey-8 toggle-color=primary").classes(
+                            on_change=on_poll_change,
+                        ).props("no-caps rounded size=sm color=grey-8 toggle-color=primary").classes(
                             "w-full"
-                        ).style("font-size:11px")
-
-                        def on_poll_change(e):
-                            settings.poll_interval = float(e.args)
-
-                        poll_select.on("update:model-value", on_poll_change)
+                        ).style("font-size:12px")
 
                 ui.separator().classes("my-2 mx-2")
 

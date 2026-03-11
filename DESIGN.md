@@ -68,4 +68,5 @@ opguia/
       graph_panel.py  # live time-series charts
       node_rows.py    # shared row rendering
       value_history.py # timestamped value ring buffer
+  theme.py            # Material Dark theme (colors, CSS, apply_theme)
 ```
