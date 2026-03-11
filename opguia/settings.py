@@ -107,6 +107,12 @@ class Settings:
         self._data["profiles"] = [p for p in self.profiles if p["url"] != url]
         self._save()
 
+    def rename_profile(self, url: str, new_name: str):
+        p = self._find_profile(url)
+        if p:
+            p["name"] = new_name
+            self._save()
+
     def ensure_profile(self, url: str, server_name: str = ""):
         """Ensure a profile exists for the given URL (creates if missing)."""
         if not self._find_profile(url):

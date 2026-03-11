@@ -17,6 +17,7 @@ python main.py
 - `opguia/scanner.py` — probes common OPC UA ports for server discovery
 - `opguia/pages/connection.py` — connection page with endpoint input + auto-scan
 - `opguia/pages/browse.py` — main browse page: sidebar + tree + watch panel + status bar + detail dialog
+- `opguia/components/node_rows.py` — shared tree-row rendering (icons, formatting, constants) used by tree_view and watch_panel
 - `opguia/components/tree_view.py` — tree rendering with typed icons, inline values, status dots
 - `opguia/components/detail_panel.py` — full node attributes + write form (used in dialog)
 - `opguia/components/watch_panel.py` — live-updating watched variable values (bottom panel)
@@ -55,3 +56,13 @@ Releases also trigger automatically via GitHub Actions when a commit is pushed t
 - Commit message containing `#release`
 
 The `release.yml` workflow auto-generates release notes, creates a GitHub release, and publishes to PyPI.
+
+### Version commit format
+
+**IMPORTANT:** When the user asks to bump version and commit, the commit title MUST be exactly `vX.Y.Z` with NO extra text (e.g. `v1.6.0`, not `v1.6.0 — description`). The GitHub Actions release workflow matches `^v\d+\.\d+\.\d+$` exactly. Put the description in the commit body instead:
+
+```
+v1.6.0
+
+Description of changes here.
+```

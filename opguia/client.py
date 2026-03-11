@@ -73,6 +73,13 @@ class OpcuaClient:
             self.client = None
             self.endpoint = ""
             raise
+        # Load custom data type definitions so asyncua can decode
+        # vendor-specific structs instead of leaving them as ExtensionObject
+        try:
+            await self.client.load_data_type_definitions()
+        except Exception:
+            pass  # Some servers don't support this — still usable
+
         # Read server metadata from the first endpoint descriptor
         try:
             endpoints = await self.client.get_endpoints()
@@ -88,7 +95,10 @@ class OpcuaClient:
 
     async def disconnect(self) -> None:
         if self.client:
-            await self.client.disconnect()
+            try:
+                await self.client.disconnect()
+            except Exception:
+                pass  # Connection may already be dead
             self.client = None
             self.endpoint = ""
             self.server_name = ""
@@ -220,14 +230,8 @@ class OpcuaClient:
 
                     if ns == 0 and isinstance(dt_id, int) and dt_id in _BASE_DATA_TYPES:
                         entry["data_type"] = _BASE_DATA_TYPES[dt_id]
-                        # Base ExtensionObject (id=22) — try to refine from decoded value
                         if dt_id == 22:
                             entry["has_children"] = True
-                            val = entry["value"]
-                            if val is not None and val != "?":
-                                real = type(val).__name__
-                                if real not in ("ExtensionObject", "NoneType", "bytes"):
-                                    entry["data_type"] = real
                     else:
                         # Custom type — queue for batch name resolution
                         needs_type_resolve.append((idx, dt_nodeid))
@@ -248,13 +252,6 @@ class OpcuaClient:
                         entry["data_type"] = "Unknown"
                     else:
                         entry["data_type"] = nr.Text
-                    # Try to refine from the decoded value (e.g. decoded struct class name)
-                    val = entry.get("value")
-                    if val is not None and val != "?":
-                        real = type(val).__name__
-                        if real not in ("ExtensionObject", "NoneType", "bytes", "str",
-                                        "int", "float", "bool", "list", "dict"):
-                            entry["data_type"] = real
                     # Custom/non-primitive types are struct-like — mark expandable
                     entry["has_children"] = True
 

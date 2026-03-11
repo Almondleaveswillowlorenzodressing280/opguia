@@ -129,17 +129,17 @@ def create_detail_panel(
                 with ui.row().classes("items-center gap-2 w-full"):
                     ui.label("Value:").classes("text-xs text-gray-500 shrink-0")
                     if is_error:
-                        ui.label(val_str).classes("text-sm font-mono text-red-400 break-all")
+                        val_display = ui.label(val_str).classes("text-sm font-mono text-red-400 break-all")
                     elif is_complex and val is None:
-                        ui.label("(complex — browse children)").classes(
+                        val_display = ui.label("(complex — browse children)").classes(
                             "text-sm font-mono text-gray-400 italic"
                         )
                     elif is_complex and val is not None:
-                        ui.label(info.get("data_type", "Struct")).classes(
+                        val_display = ui.label(info.get("data_type", "Struct")).classes(
                             "text-sm font-mono text-blue-300"
                         )
                     else:
-                        ui.label(val_str).classes("text-sm font-mono text-green-300 break-all")
+                        val_display = ui.label(val_str).classes("text-sm font-mono text-green-300 break-all")
                     if info.get("data_type"):
                         ui.label(info["data_type"]).classes("text-xs text-gray-500 ml-auto shrink-0")
 
@@ -161,6 +161,16 @@ def create_detail_panel(
                                     ui.label(fname).classes("text-xs text-gray-400 shrink-0")
                                     ui.label(fval_str).classes("text-xs font-mono text-gray-200 break-all")
 
+                # Write status hint when writes are blocked
+                if not can_write and info.get("writable") and not writes_ok:
+                    ui.label("Enable 'Allow writes' in sidebar to write").classes(
+                        "text-xs text-orange-400 italic"
+                    )
+                elif not can_write and not info.get("writable") and not is_complex:
+                    ui.label("Node is read-only (server)").classes(
+                        "text-xs text-gray-600 italic"
+                    )
+
                 # Write form (only for writable, non-error, non-complex variables)
                 if can_write:
                     dt = info.get("data_type", "")
@@ -174,9 +184,10 @@ def create_detail_panel(
                         if hint:
                             write_input.tooltip(f"Type: {dt} ({hint})")
 
-                        async def do_write(nid=node_id, inp=write_input, st=write_status, dtype=dt):
+                        async def do_write(nid=node_id, inp=write_input, st=write_status, dtype=dt, vd=val_display):
+                            raw = inp.value
                             # Validate before writing
-                            err = _validate_write(inp.value, dtype)
+                            err = _validate_write(raw, dtype)
                             if err:
                                 st.text = err
                                 st.classes(remove="text-green-400", add="text-red-400")
@@ -184,15 +195,22 @@ def create_detail_panel(
                             st.text = "Writing..."
                             st.classes(remove="text-red-400 text-green-400")
                             try:
-                                await client.write_value(nid, inp.value)
-                                st.text = "OK"
-                                st.classes(add="text-green-400")
-                                await asyncio.sleep(0.5)
-                                await show_details(nid)  # refresh after write
+                                await client.write_value(nid, raw)
                             except Exception as e:
                                 st.text = str(e)
                                 st.classes(add="text-red-400")
+                                return
+                            # Verify the write by reading back
+                            try:
+                                new_val = await client.read_value(nid)
+                                vd.text = str(new_val)
+                                st.text = f"OK — value: {new_val}"
+                                st.classes(add="text-green-400")
+                            except Exception as e:
+                                st.text = f"Written but read-back failed: {e}"
+                                st.classes(add="text-red-400")
 
+                        write_input.on("keydown.enter", do_write)
                         ui.button("Write", on_click=do_write).props("dense size=sm color=primary")
 
                 # Refresh for read-only variables

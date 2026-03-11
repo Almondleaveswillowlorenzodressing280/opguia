@@ -56,7 +56,7 @@ def register(client: OpcuaClient, settings: Settings):
                 ui.badge("Connected", color="green").props("rounded").classes("text-xs")
 
         # ── Middle: sidebar + main content ──
-        with ui.row().classes("w-full no-wrap overflow-hidden").style("flex:1; min-height:0"):
+        with ui.row().classes("w-full no-wrap overflow-hidden gap-0").style("flex:1; min-height:0"):
 
             # Sidebar (fixed width, vertical scroll only)
             with ui.column().classes(
@@ -122,7 +122,7 @@ def register(client: OpcuaClient, settings: Settings):
                     ).props("dense size=sm color=orange").classes("text-xs")
 
                     def on_write_toggle(e):
-                        settings.allow_writes = e.args
+                        settings.allow_writes = bool(e.args)
 
                     write_switch.on("update:model-value", on_write_toggle)
 
@@ -271,12 +271,34 @@ def register(client: OpcuaClient, settings: Settings):
             lambda: rebuild_tree(filter_query=search_input.value.strip().lower()),
         )
 
+        # Connection loss detection + redirect
+        _disconnecting = {"v": False}
+
+        async def handle_disconnect():
+            if _disconnecting["v"]:
+                return
+            _disconnecting["v"] = True
+            await client.disconnect()
+            ui.notify("Connection lost", type="warning")
+            await asyncio.sleep(1)
+            ui.navigate.to("/")
+
         # Latency polling (every 5s) + value polling (every 2s)
         async def update_latency():
+            fail_count = 0
             while client.connected:
-                ms = await client.measure_latency()
-                if ms is not None:
-                    latency_label.text = f"Latency: {ms} ms"
+                try:
+                    ms = await client.measure_latency()
+                    if ms is not None:
+                        latency_label.text = f"Latency: {ms} ms"
+                        fail_count = 0
+                    else:
+                        fail_count += 1
+                except Exception:
+                    fail_count += 1
+                if fail_count >= 3:
+                    await handle_disconnect()
+                    return
                 await asyncio.sleep(5)
 
         async def update_values():

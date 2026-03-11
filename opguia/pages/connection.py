@@ -65,6 +65,7 @@ def register(client: OpcuaClient, settings: Settings):
                     status = ui.label("").classes("text-xs")
 
                     async def do_connect():
+                        connect_btn.props("loading")
                         status.text = "Connecting..."
                         status.classes(remove="text-red-400 text-green-400")
                         try:
@@ -79,9 +80,11 @@ def register(client: OpcuaClient, settings: Settings):
                         except Exception as e:
                             status.text = str(e)
                             status.classes(add="text-red-400")
+                        finally:
+                            connect_btn.props(remove="loading")
 
                     with ui.row().classes("w-full gap-2"):
-                        ui.button("Connect", on_click=do_connect).classes("flex-grow")
+                        connect_btn = ui.button("Connect", on_click=do_connect).classes("flex-grow")
                         ui.button(
                             icon="bookmark_add",
                             on_click=lambda: save_profile(endpoint.value, profile_name.value.strip()),
@@ -145,7 +148,9 @@ def register(client: OpcuaClient, settings: Settings):
             with ui.column().classes("gap-0").style("width:400px; overflow-y:auto"):
                 saved_card = ui.card().classes("w-full p-4")
 
-                async def connect_profile(url: str, name: str):
+                async def connect_profile(url: str, name: str, btn=None):
+                    if btn:
+                        btn.props("loading")
                     try:
                         await client.connect(url)
                         settings.ensure_profile(url, name)
@@ -153,6 +158,9 @@ def register(client: OpcuaClient, settings: Settings):
                         ui.navigate.to("/browse")
                     except Exception as e:
                         ui.notify(str(e), type="negative")
+                    finally:
+                        if btn:
+                            btn.props(remove="loading")
 
                 def render_saved():
                     saved_card.clear()
@@ -180,7 +188,35 @@ def register(client: OpcuaClient, settings: Settings):
                             )
 
                             with ui.column().classes("gap-1 min-w-0 flex-grow"):
-                                ui.label(prof["name"]).classes("text-sm font-medium truncate")
+                                with ui.row().classes("items-center gap-1 w-full"):
+                                    name_label = ui.label(prof["name"]).classes(
+                                        "text-sm font-medium truncate"
+                                    )
+                                    name_input = ui.input(value=prof["name"]).props(
+                                        "dense borderless"
+                                    ).classes("text-sm font-medium").style(
+                                        "max-width:200px"
+                                    )
+                                    name_input.visible = False
+
+                                    def start_edit(nl=name_label, ni=name_input):
+                                        nl.visible = False
+                                        ni.visible = True
+
+                                    def finish_edit(url=prof["url"], nl=name_label, ni=name_input):
+                                        new_name = ni.value.strip()
+                                        if new_name and new_name != prof["name"]:
+                                            settings.rename_profile(url, new_name)
+                                            nl.text = new_name
+                                        nl.visible = True
+                                        ni.visible = False
+
+                                    ui.button(icon="edit", on_click=start_edit).props(
+                                        "flat dense round size=xs"
+                                    ).classes("text-gray-600 shrink-0")
+                                    name_input.on("keydown.enter", lambda u=prof["url"], nl=name_label, ni=name_input: finish_edit(u, nl, ni))
+                                    name_input.on("blur", lambda u=prof["url"], nl=name_label, ni=name_input: finish_edit(u, nl, ni))
+
                                 ui.label(prof["url"]).classes(
                                     "font-mono text-gray-500 truncate"
                                 ).style("font-size:11px")
@@ -212,10 +248,11 @@ def register(client: OpcuaClient, settings: Settings):
                                     )
 
                         with ui.row().classes("w-full justify-end gap-1 mt-2"):
-                            connect_btn = ui.button(
-                                "Connect",
-                                on_click=lambda u=prof["url"], n=prof["name"]: connect_profile(u, n),
-                            ).props("dense size=sm color=primary")
+                            prof_btn = ui.button("Connect").props("dense size=sm color=primary")
+                            prof_btn.on(
+                                "click",
+                                lambda u=prof["url"], n=prof["name"], b=prof_btn: connect_profile(u, n, b),
+                            )
 
                             def remove(u=prof["url"]):
                                 settings.remove_profile(u)
@@ -226,7 +263,7 @@ def register(client: OpcuaClient, settings: Settings):
                             ).props("flat dense size=sm color=red").tooltip("Remove profile")
 
                     # Ping in background
-                    async def update_dot(url=prof["url"], d=dot, btn=connect_btn, lbl=status_label):
+                    async def update_dot(url=prof["url"], d=dot, btn=prof_btn, lbl=status_label):
                         reachable = await _ping(url)
                         if reachable:
                             d.classes(remove="text-gray-600", add="text-green-500")
