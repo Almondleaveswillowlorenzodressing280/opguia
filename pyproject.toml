@@ -25,11 +25,13 @@ classifiers = [
 dependencies = [
     "asyncua>=1.0.0",
     "nicegui>=1.4.0",
+    "pyperclip>=1.8",
     "pywebview>=4.0",
 ]
 
 [project.scripts]
 opguia = "opguia.app:run"
+opguia-cli = "opguia.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/kyle/opguia"

@@ -138,6 +138,40 @@ class OpcuaClient:
             node = found
         return node.nodeid.to_string()
 
+    # ── Path resolution ──
+
+    async def get_node_path(self, node_id: str) -> list[str]:
+        """Walk up from a node to the Objects folder, returning display names.
+
+        Returns e.g. ["Server", "ServerStatus", "CurrentTime"].
+        """
+        if not self.client:
+            raise RuntimeError("Not connected")
+        objects_id = self.client.nodes.objects.nodeid.to_string()
+        node = self.client.get_node(node_id)
+        path = []
+        for _ in range(50):  # depth limit
+            nid = node.nodeid.to_string()
+            if nid == objects_id:
+                break
+            try:
+                dn = await node.read_display_name()
+                path.append(dn.Text if dn and dn.Text else nid)
+            except Exception:
+                path.append(nid)
+            try:
+                parents = await node.get_references(
+                    refs=ua.ObjectIds.HierarchicalReferences,
+                    direction=ua.BrowseDirection.Inverse,
+                )
+                if not parents:
+                    break
+                node = self.client.get_node(parents[0].NodeId)
+            except Exception:
+                break
+        path.reverse()
+        return path
+
     # ── Browse children (tree population) ──
 
     async def browse_children(self, node_id: str | None = None) -> list[dict]:

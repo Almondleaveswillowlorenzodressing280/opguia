@@ -5,6 +5,7 @@ writing: value + write input at top, full attribute details collapsed below.
 """
 
 import asyncio
+import pyperclip
 from nicegui import ui
 from opguia.client import OpcuaClient
 from opguia.settings import Settings
@@ -61,6 +62,20 @@ def _validate_write(raw: str, data_type: str) -> str | None:
     return None
 
 
+
+def _copy_btn(label: ui.label):
+    """Small copy-to-clipboard button."""
+    btn = ui.button(icon="content_copy").props("flat dense round size=xs").classes("text-gray-600").tooltip("Copy")
+
+    async def _copy():
+        pyperclip.copy(label.text)
+        btn.props("icon=check color=green")
+        await asyncio.sleep(1.5)
+        btn.props("icon=content_copy color=")
+
+    btn.on("click", _copy)
+
+
 def create_detail_panel(
     client: OpcuaClient,
     on_set_root=None,
@@ -84,6 +99,10 @@ def create_detail_panel(
 
         try:
             info = await client.get_node_details(node_id)
+            try:
+                info["_path"] = await client.get_node_path(node_id)
+            except Exception:
+                info["_path"] = None
         except Exception as e:
             container.clear()
             with container:
@@ -236,6 +255,7 @@ def create_detail_panel(
                 rows = [
                     ("Node ID", info["node_id"]),
                     ("Browse Name", info["browse_name"]),
+                    ("Path", " / ".join(info["_path"]) if info.get("_path") else "—"),
                 ]
                 if is_var:
                     rows += [
@@ -251,9 +271,11 @@ def create_detail_panel(
                 if info.get("description"):
                     rows.append(("Description", info["description"]))
 
-                for label, val in rows:
+                for row_label, val in rows:
+                    val_str = str(val)
                     with ui.row().classes("items-start gap-2 w-full"):
-                        ui.label(label).classes("text-xs text-gray-500 w-24 shrink-0 text-right")
-                        ui.label(str(val)).classes("text-xs font-mono break-all")
+                        ui.label(row_label).classes("text-xs text-gray-500 w-24 shrink-0 text-right")
+                        val_lbl = ui.label(val_str).classes("text-xs font-mono break-all")
+                        _copy_btn(val_lbl)
 
     return container, show_details

@@ -21,6 +21,7 @@ python main.py
 - `opguia/components/tree_view.py` — tree rendering with typed icons, inline values, status dots
 - `opguia/components/detail_panel.py` — full node attributes + write form (used in dialog)
 - `opguia/components/watch_panel.py` — live-updating watched variable values (bottom panel)
+- `opguia/cli.py` — headless CLI for querying, reading, writing nodes without the GUI
 - `opguia/tunnel.py` — SSH port-forwarding tunnel manager (ssh -L subprocess)
 - `opguia/settings.py` — persistent settings with connection profiles (JSON in OS config dir)
 - `opguia/native.py` — platform-specific native window config (dock icon, app name, taskbar)
